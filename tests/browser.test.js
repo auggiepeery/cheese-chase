@@ -27,9 +27,22 @@ await page.keyboard.down('KeyW');
 for (let i = 0; i < (process.env.QUICK ? 3 : 6); i++) {
   await page.evaluate(() => window.__cc.advance(1.5));
   await sleep(1200);
-  if (i === 2) { await page.keyboard.press('Space'); await sleep(200); await page.keyboard.press('KeyE'); await page.keyboard.press('KeyF'); }
+  if (i === 2) { await page.keyboard.press('Space'); await sleep(200); await page.keyboard.press('KeyE'); }
   await page.screenshot({ path: `shots/${tag}-4-run${i}.png` });
 }
+// roll-jump through the real keyboard path: knock the player over at speed, press Space mid-tumble
+const rj = await page.evaluate(async () => {
+  const g = window.__cc.game, C = window.__cc.Core, me = g.race.racers.find((r) => r.id === 'p1');
+  me.state = C.ST.TUMBLE; me.st = 0.6; me.vz = Math.max(me.vz, 12); me.charges = 2; me.grounded = true; me.airT = 0;
+  return me.charges;
+});
+await page.keyboard.press('Space');
+await page.evaluate(() => window.__cc.advance(0.05));
+const rj2 = await page.evaluate(() => { const me = window.__cc.game.race.racers.find((r) => r.id === 'p1'); return { charges: me.charges, vy: me.vy, state: me.state }; });
+console.log('roll-jump in browser', rj, '->', rj2);
+if (!(rj2.charges === rj - 1)) { console.log('FAIL: roll-jump did not fire from the keyboard'); process.exitCode = 1; }
+await page.evaluate(() => window.__cc.advance(0.6));
+await page.screenshot({ path: `shots/${tag}-4-rolljump.png` });
 await page.keyboard.up('KeyW');
 const st = await page.evaluate(() => { const g = window.__cc.game; const me = g.race.racers.find((r) => r.id === 'p1'); return { phase: g.race.phase, t: g.race.raceT, z: me.z, state: me.state, fps: window.__cc.fps, cheeseZ: g.race.cheese.z }; });
 console.log('solo state', st);
@@ -38,7 +51,11 @@ await page.evaluate(() => { const g = window.__cc.game; const C = window.__cc.Co
 await page.evaluate(() => window.__cc.advance(3)); await sleep(2500);
 await page.screenshot({ path: `shots/${tag}-5-results.png` });
 const resVisible = await page.evaluate(() => document.querySelector('#screen-results').classList.contains('show'));
-console.log('results visible', resVisible, await page.evaluate(() => document.querySelector('#res-title').textContent));
+console.log('results visible', resVisible, await page.evaluate(() => document.querySelector('#res-title').textContent), '|', await page.evaluate(() => document.querySelector('#res-board').textContent));
+await page.keyboard.press('KeyR'); await sleep(800);
+const heat = await page.evaluate(() => window.__cc.game.match && window.__cc.game.match.heat);
+console.log('next heat', heat);
+if (heat !== 2) { console.log('FAIL: next heat did not start'); process.exitCode = 1; }
 await page.keyboard.press('Escape'); await sleep(500);
 await page.click('#btn-split'); await sleep(500);
 await page.keyboard.press('Enter'); await sleep(1500);
@@ -52,4 +69,4 @@ await page.click('#btn-online'); await sleep(300); await page.keyboard.press('En
 await page.screenshot({ path: `shots/${tag}-7-online.png` });
 await browser.close();
 console.log(errors.length ? 'CONSOLE ERRORS/WARNINGS:\n' + errors.join('\n') : 'No console errors or warnings.');
-process.exit(errors.some((e) => e.startsWith('[error]') || e.startsWith('[pageerror]')) ? 1 : 0);
+process.exit(errors.some((e) => e.startsWith('[error]') || e.startsWith('[pageerror]')) ? 1 : (process.exitCode || 0));

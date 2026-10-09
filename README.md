@@ -15,23 +15,32 @@ throws themselves down after it. Inspired by the traditional cheese-rolling race
 | Action | Solo / Online | 2P: Player 1 | 2P: Player 2 |
 |---|---|---|---|
 | Run / steer | `W A S D` or arrows | `W A S D` | arrows |
-| Brake / steady yourself | `S` / `↓` | `S` | `↓` |
-| **Sprint** (hold; drains the SPRINT bar, much likelier to trip) | `Shift` | `Left Shift` | `Right Shift` / `Numpad0` |
-| **Jump** | `Q` | `Q` | `'` / `Numpad3` |
-| Dive (lunge forward) | `Space` | `Space` | `Enter` |
-| Get up after a tumble (once you've slowed) | `Space` (or `Q` / `E`) | `Space` | `Enter` |
-| **Grab the cheese** (when close) | `E` | `E` | `.` / `Numpad1` |
-| **Grab a racer** (trips them into a tumble) | `F` | `F` | `/` / `Numpad2` |
-| Quit to menu / rematch | `Esc` / `R` on the results screen | | |
+| Brake (also calms the BALANCE bar quickly) | `S` / `↓` | `S` | `↓` |
+| **Sprint** (hold; 2.2 s of boost, refills only once released) | `Shift` | `Left Shift` | `Right Shift` / `Numpad0` |
+| **Jump**. Near the cheese it becomes a **dive** at it. | `Space` | `Space` | `Enter` |
+| Mid-tumble: **roll-jump** (2 charges, about 2.5 s recharge each), or **get up** once slowed | `Space` | `Space` | `Enter` |
+| **Grab**: the cheese if it's in reach, otherwise the nearest racer (trips them) | `E` (or `F`) | `E` | `/` / `.` / `Numpad1` |
+| Mute sound | `M` | | |
+| Quit / next heat | `Esc` / `R` on the results screen | | |
 
-**How to win:** get close to the cheese and press **E** (diving gives extra reach), or be first over the finish line.
-The hill speeds you up on its own. Sprinting builds speed fast. Above about 45 km/h your **BALANCE** bar fills, and at
-very high speed you can simply stumble. Hard landings, big air off a lump, and *every* jump or dive end with you
-**ragdolling** down the slope with your momentum. Nobody lands on their feet. You get up automatically once you've
-slowed, or sooner with `Space`.
+**How to win:** grab the cheese or be first over the finish line. Each match is **best of 3 heats**, with a running
+scoreboard (heat wins first, then points: 3 for 1st, 2 for 2nd, 1 for 3rd). The match ends when someone wins 2 heats.
+
+**Movement:**
+* The hill speeds you up on its own. Above about 38 km/h, or when you yank the steering at speed, your **BALANCE**
+  bar fills. When it's full you go over.
+* **Rolling is fast.** A tumbling runner has full gravity along the slope and very little friction, so they keep
+  or gain momentum (about 60 km/h on the steep face). While you roll, `Space` launches a **roll-jump** up and forward
+  toward the cheese, and you can steer in the air. A flying roll-jump that reaches the cheese grabs it automatically,
+  just like a dive.
+* A well-timed jump on smooth ground lands **clean**, with a small speed boost. Landing hard or off a lump sends you
+  rolling. You get up automatically once you slow down, or press `Space` to get up sooner.
+* The cheese runs away on the steep face and slows on the run-out, so it's usually caught near the bottom. Races
+  last about 30 to 35 s. AI racers can't grab the cheese for the first 13 s, and they're lightly rubber-banded
+  around the leading human.
 
 ### The hill
-The course is about 260 m of English hillside, modelled on the profile of a real cheese-rolling hill: a convex top,
+The course is about 390 m of English hillside, modelled on the profile of a real cheese-rolling hill: a convex top,
 a near-1:1 face, a ledge, another steep drop, then the run-out into hay bales. It is lumpy and uneven, with tufty
 grass, worn mud tracks down the racing lines, post-and-rail fences, spectators (some with umbrellas) on the banks,
 hedges and woodland, patchwork fields in the valley, and overcast British daylight. All of it is procedural and original.
@@ -107,12 +116,22 @@ and human cheese grabs get +0.5 m of lag-compensating reach.
 ```bash
 npm test                                                # core sim + server/WebSocket protocol test
 node tests/net.test.js https://<your-service>.onrender.com   # protocol test against a deployed server
-CHROME=/path/to/chrome npm run test:browser             # headless browser: menu, solo, results, split-screen
+CHROME=/path/to/chrome npm run test:browser             # headless browser: menu, solo, roll-jump, results, next heat, split-screen
+node tests/feel.shots.js                                # camera/HUD screenshots (SOLO=1 hides the AI)
 node tests/online.browser.test.js http://localhost:8797 # two headless browsers race online
 ```
 
+### Camera, HUD, sound
+A low, close chase camera looks down the slope and leads fast runners so they stay in frame. The field of view widens
+with speed, and you get speed lines, a light shake on bumps, and a slow orbit after the race. Toasts sit in a small
+corner feed showing only your events and nearby ones. The cheese has a pulsing glow and pin, plus an edge-of-screen
+arrow when it's off camera. A big wipeout gives half a second of slow-mo (offline only). Sound is synthesized with
+WebAudio: footsteps, thuds, wind that rises with speed, the crowd, and a roar on the catch. It starts on your first
+key press.
+
 ## Limitations
-* There is no audio.
+* Best-of-3 heats are offline only (solo and split-screen). Online rooms run single races.
+* Slow-mo is offline only, so it never desyncs online play.
 * The physics is custom and lightweight; there is no external engine. The race logic treats each runner as a point
   mass, and ragdolls are simulated on each client and softly tethered to that authoritative body. In online play,
   everyone sees the same body positions and outcomes, but the exact limb flailing can differ slightly between

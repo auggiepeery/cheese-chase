@@ -47,7 +47,7 @@
   #lobby-players small { color:#8a7650; font-weight:600; margin-left: 6px; }
   #res-title { font-size: 44px; margin: 0; font-weight: 900; } #res-title.win { color:#e08a00; } #res-title.lose { color:#7a4a10; }
   #res-table { margin: 14px auto; border-collapse: collapse; min-width: 70%; }
-  #res-table td { padding: 6px 12px; border-bottom: 1px solid #e3d3a9; text-align:left; }
+  #res-table td { padding: 4px 12px; border-bottom: 1px solid #e3d3a9; text-align:left; }
   #res-table tr.me td { background: #ffe9a6; font-weight: 800; }
   /* HUD */
   #huds { position:fixed; inset:0; pointer-events:none; z-index: 5; }
@@ -67,9 +67,20 @@
   .meter.stam span { line-height: 6px; font-size: 7px; }
   .meter span { position:absolute; inset:0; font-size: 9px; font-weight: 900; letter-spacing: 2px; text-align:center; line-height: 10px; color: rgba(255,255,255,0.9); }
   .cheese-dist { font-weight: 800; font-size: 16px; }
-  .hud-msg { position:absolute; top: 28%; left:0; right:0; text-align:center; font-size: 46px; font-weight: 900; opacity:0; transform: scale(.7); transition: opacity .15s, transform .15s; }
+  .hud-msg { position:absolute; top: 9%; left:0; right:0; text-align:center; font-size: 30px; text-shadow: 0 3px 10px rgba(0,0,0,.5); font-weight: 900; opacity:0; transform: scale(.7); transition: opacity .15s, transform .15s; }
   .hud-msg.show { opacity: 1; transform: scale(1); }
-  .hud-msg.red { color:#ff6b5b; } .hud-msg.gold { color: var(--gold); } .hud-msg.go { color:#7dff8a; font-size: 80px; } .hud-msg.big { font-size: 60px; }
+  .hud-msg.red { color:#ff6b5b; } .hud-msg.gold { color: var(--gold); } .hud-msg.go { color:#7dff8a; font-size: 40px; } .hud-msg.big { font-size: 48px; }
+  .hud-feed { position:absolute; top: 96px; right: 14px; width: 300px; text-align:right; pointer-events:none; }
+  .hud-feed .feed-item { display:inline-block; background: rgba(0,0,0,0.42); padding: 3px 10px; border-radius: 10px; margin: 2px 0; font-weight: 700; font-size: 13px; transition: opacity 1s; }
+  .hud-feed .feed-item.fade { opacity: 0; }
+  .speedlines { position:absolute; inset:0; opacity:0; pointer-events:none; transition: opacity .25s;
+    background: repeating-conic-gradient(from 0deg at 50% 45%, rgba(255,255,255,0.0) 0deg 5deg, rgba(255,255,255,0.22) 5.4deg, rgba(255,255,255,0.0) 6deg 11deg);
+    -webkit-mask-image: radial-gradient(ellipse at 50% 45%, transparent 38%, #000 80%); mask-image: radial-gradient(ellipse at 50% 45%, transparent 38%, #000 80%); animation: lines .12s steps(2) infinite; }
+  @keyframes lines { 50% { transform: rotate(1.5deg) scale(1.02); } }
+  .cheese-arrow { position:absolute; display:none; width: 48px; height: 48px; margin: -24px 0 0 -24px; font-size: 26px; line-height: 48px; text-align:center; background: rgba(0,0,0,0.45); border: 2px solid var(--gold); border-radius: 50%; pointer-events:none; animation: pulse .5s infinite alternate; }
+  .cheese-arrow i { position:absolute; inset:-14px; font-style:normal; color: var(--gold); font-size: 20px; line-height: 76px; text-align:right; }
+  .charges { font-size: 11px; font-weight: 900; letter-spacing: 1px; margin: 2px 0 4px; } .charges b { color: var(--gold); font-size: 15px; } .charges i { font-style: normal; opacity: .3; font-size: 15px; }
+  #res-board { margin: 8px auto; } .chips { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:6px; } .chip { background:#f3e2b3; border-radius: 12px; padding: 3px 10px; font-weight: 700; font-size: 14px; } .chip.me { background:#ffd34d; } .board-title { font-weight: 900; color: #b35f12; }
   .hud-hint { position:absolute; bottom: 22%; left:0; right:0; text-align:center; font-size: 22px; font-weight: 900; opacity:0; transition: opacity .15s; }
   .hud-hint.show { opacity: 1; } .hud-hint.hot { color: var(--gold); font-size: 30px; animation: pulse .4s infinite alternate; }
   @keyframes pulse { to { transform: scale(1.08); } }
@@ -102,7 +113,7 @@
 <div id="touch">
   <button id="t-left" style="left:20px;bottom:110px">◀</button><button id="t-right" style="left:100px;bottom:110px">▶</button>
   <button id="t-run" style="left:60px;bottom:190px">RUN</button><button id="t-brake" style="left:60px;bottom:30px">BRAKE</button>
-  <button id="t-dive" style="right:20px;bottom:30px">DIVE</button><button id="t-grab" style="right:100px;bottom:80px">GRAB🧀</button><button id="t-tackle" style="right:20px;bottom:120px">GRAB👤</button><button id="t-jump" style="right:100px;bottom:170px">JUMP</button><button id="t-sprint" style="left:140px;bottom:190px">SPRINT</button>
+  <button id="t-jump" style="right:20px;bottom:40px">JUMP</button><button id="t-grab" style="right:100px;bottom:100px">GRAB</button><button id="t-sprint" style="left:140px;bottom:190px">SPRINT</button>
 </div>
 
 <div id="screen-menu" class="screen">
@@ -115,13 +126,13 @@
       <button class="btn alt" id="btn-online">3 · Online Multiplayer<small>rooms with 4-letter codes</small></button>
     </div>
     <div class="controls">
-      <span><b>Run / steer</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows</span><span><b>Brake / steady</b> <kbd>S</kbd> / <kbd>↓</kbd></span>
-      <span><b>Sprint</b> hold <kbd>Shift</kbd> (risky!)</span><span><b>Jump</b> <kbd>Q</kbd></span>
-      <span><b>Dive</b> <kbd>Space</kbd></span><span><b>Grab the cheese</b> <kbd>E</kbd></span>
-      <span><b>Grab a racer</b> <kbd>F</kbd> (slows / trips them)</span><span><b>Quit</b> <kbd>Esc</kbd> · <b>Rematch</b> <kbd>R</kbd></span>
+      <span><b>Run / steer</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows</span><span><b>Brake</b> <kbd>S</kbd> / <kbd>↓</kbd> (calms your balance)</span>
+      <span><b>Sprint</b> hold <kbd>Shift</kbd> (2.2 s, refills when released)</span><span><b>Jump / dive</b> <kbd>Space</kbd></span>
+      <span><b>Grab</b> <kbd>E</kbd> (the cheese if close, else a racer)</span><span><b>Mid-tumble</b> <kbd>Space</kbd> = roll-jump (2 charges) / get up</span>
+      <span><b>Sound</b> <kbd>M</kbd> mute</span><span><b>Quit</b> <kbd>Esc</kbd> · <b>Next heat</b> <kbd>R</kbd></span>
     </div>
-    <p class="fine">Catch the cheese (get close and press <kbd>E</kbd>) or be first over the finish line to win. The hill speeds you up on its own; sprinting builds speed fast but makes you far likelier to trip. Nobody lands a jump or dive on their feet here: you ragdoll and roll, then get up (press <kbd>Space</kbd> once you've slowed).<br>
-    2-player: P1 = WASD, Left Shift sprint, Q jump, Space dive, E grab cheese, F grab racer · P2 = Arrows, Right Shift / Num0 sprint, <kbd>'</kbd> / Num3 jump, Enter dive, <kbd>.</kbd> / Num1 grab cheese, <kbd>/</kbd> / Num2 grab racer.<br>
+    <p class="fine">Catch the cheese or be first over the line. Best of 3 heats. Rolling down the hill is <i>fast</i>: tumble, then press <kbd>Space</kbd> to launch yourself at the cheese and steer in the air. Jump near the cheese and you dive at it automatically (a dive that reaches it grabs it). A well-timed jump on smooth ground lands clean with a speed boost; a bad one sends you rolling. Too much speed or wild steering fills your balance meter.<br>
+    2-player: P1 = WASD, Left Shift sprint, Space jump, E grab · P2 = Arrows, Right Shift / Num0 sprint, Enter jump, <kbd>/</kbd> or <kbd>.</kbd> / Num1 grab.<br>
     An original game inspired by the traditional cheese-rolling races of Gloucestershire.</p>
   </div>
 </div>
@@ -167,6 +178,7 @@
     <div id="res-title"></div>
     <div id="res-sub" class="tag"></div>
     <table id="res-table"></table>
+    <div id="res-board"></div>
     <div id="res-best" class="fine"></div>
     <div id="res-wait" class="fine">Waiting for the host to start the next race…</div>
     <div><button class="btn alt" id="btn-menu">Main menu (Esc)</button><button class="btn" id="btn-again">Race again (R)</button></div>

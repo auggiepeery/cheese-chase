@@ -1,0 +1,25 @@
+// Visual check of the camera / HUD / roll-jump. node tests/feel.shots.js  -> shots/feel-*.png
+import puppeteer from 'puppeteer-core';
+import path from 'node:path';
+const browser = await puppeteer.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', headless: 'new', args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage(); await page.setViewport({ width: 960, height: 540 });
+const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const shot = async (n) => { if (process.env.SOLO) await page.evaluate(() => { for (const [id, rv] of window.__cc.game.racerViews) if (id !== 'p1') rv.root.visible = false; }); await sleep(1400); await page.screenshot({ path: `shots/feel-${n}.png` }); };
+await page.goto('file://' + path.resolve('index.html') + '?quality=low'); await sleep(1500);
+await page.click('#btn-solo'); await sleep(300); await page.click('#select-go'); await sleep(500);
+await page.evaluate(() => window.__cc.advance(2.6)); await shot('0-start');
+await page.evaluate(() => window.__cc.advance(2.1));
+await page.keyboard.down('KeyW'); await page.keyboard.down('ShiftLeft');
+await page.evaluate(() => window.__cc.advance(4)); await shot('1-run');
+await page.keyboard.up('ShiftLeft');
+await page.evaluate(() => { const g = window.__cc.game, C = window.__cc.Core, me = g.race.racers.find((r) => r.id === 'p1'); me.state = C.ST.TUMBLE; me.st = 0.6; me.vz = 15; });
+await page.evaluate(() => window.__cc.advance(0.6)); await shot('2-tumble');
+await page.keyboard.press('Space');
+await page.evaluate(() => window.__cc.advance(0.3)); await shot('3-rolljump');
+await page.evaluate(() => window.__cc.advance(6)); await shot('4-later');
+await page.evaluate(() => { const g = window.__cc.game, C = window.__cc.Core; for (let i = 0; i < 60 * 90 && g.race.phase !== 'over'; i++) { C.step(g.race, 1 / 60, {}); g.race.events = []; } });
+await page.evaluate(() => window.__cc.advance(1.5)); await shot('5-orbit');
+await page.keyboard.up('KeyW');
+await browser.close();
+console.log(errors.length ? errors.join('\n') : 'no errors');

@@ -10,7 +10,7 @@ await page.click('#btn-solo'); await sleep(300); await page.click('#select-go');
 await page.evaluate(() => window.__cc.advance(4.7));
 await page.keyboard.down('KeyW');
 await page.evaluate(() => window.__cc.advance(2.5));
-await page.keyboard.press('KeyQ');
+await page.keyboard.press('Space');
 for (let i = 0; i < 5; i++) {
   await page.evaluate(() => window.__cc.advance(0.35));
   const st = await page.evaluate(() => { const r = window.__cc.game.race.racers.find((x) => x.id === 'p1'); return [r.state, r.why, +r.z.toFixed(1)]; });
