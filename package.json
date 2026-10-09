@@ -8,7 +8,7 @@
   "scripts": {
     "start": "node server.js",
     "build": "node build.mjs",
-    "test": "node tests/sim.test.js && node tests/net.test.js",
+    "test": "node tests/sim.test.js && node tests/balance.test.js && node tests/net.test.js",
     "test:browser": "node tests/browser.test.js"
   },
   "license": "MIT",

@@ -126,34 +126,55 @@ export class Particles {
 
 // ---------- scene construction ----------
 
-// ---------- overcast English sky dome (procedural clouds) ----------
+// ---------- clear blue sky dome (smooth gradient; the clouds are low-poly meshes) ----------
+export const FOG_K = 0.98;
+export const SKY_HORIZON = [0.30, 0.42, 0.62], SKY_ZENITH = [0.06, 0.16, 0.46]; // pre-ACES (three scales by 1/0.6)
 function makeSkyDome(radius) {
+  const v3 = (c) => `vec3(${c.map((x) => x.toFixed(3)).join(',')})`;
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: { time: { value: 0 } },
-    vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }`,
+    vertexShader: `varying vec3 vDir; void main(){ vDir = position; vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }`,
     fragmentShader: `uniform float time; varying vec3 vDir;
-      float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-      float noise(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f*f*(3.0-2.0*f);
-        return mix(mix(hash(i), hash(i+vec2(1,0)), u.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), u.x), u.y); }
-      float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++){ v += a*noise(p); p *= 2.03; a *= 0.5; } return v; }
       void main(){
-        float h = clamp(vDir.y, -1.0, 1.0);
-        vec3 horizon = vec3(0.84, 0.81, 0.75), zenith = vec3(0.55, 0.64, 0.75);
-        vec3 col = mix(horizon, zenith, smoothstep(0.0, 0.7, h));
-        vec2 uv = vDir.xz / max(h + 0.12, 0.08) * 0.9 + vec2(time * 0.006, time * 0.002);
-        float c = fbm(uv), d = fbm(uv * 1.9 + 7.3);
-        float m = smoothstep(0.05, 0.45, h);
-        col = mix(col, vec3(0.95, 0.92, 0.86), smoothstep(0.35, 0.75, c) * 0.7 * m);   // pale cloud masses
-        col = mix(col, vec3(0.55, 0.58, 0.64), smoothstep(0.55, 0.85, d) * 0.35 * m);   // darker rain-bellies
-        col = mix(col, horizon, 1.0 - smoothstep(-0.02, 0.3, h)); // soft haze band that matches the fog
+        vec3 d = normalize(vDir);            // per-pixel: no banding from interpolated directions
+        float h = clamp(d.y, -1.0, 1.0);
+        vec3 horizon = ${v3(SKY_HORIZON)}, zenith = ${v3(SKY_ZENITH)};
+        vec3 col = mix(horizon, zenith, pow(smoothstep(0.0, 0.85, h), 0.7));
+        col += vec3(1.0, 0.86, 0.62) * 0.06 * pow(max(0.0, 1.0 - abs(h - 0.02) * 6.0), 2.0); // faint warm glow on the horizon
+        col = mix(col, horizon, 1.0 - smoothstep(-0.03, 0.06, h)); // below the horizon = haze (matches the fog)
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
   });
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 16), mat);
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 64, 32), mat);
   mesh.renderOrder = -10; mesh.frustumCulled = false;
+  return mesh;
+}
+
+// chunky low-poly cumulus: clusters of flattened faceted blobs, far away and unfogged
+function makeClouds(rnd) {
+  const geo = new THREE.IcosahedronGeometry(1, 1);
+  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xaab4c4, flatShading: true, fog: false });
+  const N = 34, PER = 6;
+  const mesh = new THREE.InstancedMesh(geo, mat, N * PER);
+  const d = new THREE.Object3D();
+  let k = 0;
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2 + rnd() * 0.15, r = 520 + rnd() * 260;
+    const cx = Math.sin(a) * r, cz = 200 + Math.cos(a) * r, cy = 70 + rnd() * 120;
+    const s = 22 + rnd() * 26;
+    for (let j = 0; j < PER; j++) {
+      const ox = (j - PER / 2) * s * 0.55 + (rnd() - 0.5) * s * 0.4, oy = (j % 2 ? 0.25 : 0) * s + rnd() * s * 0.2;
+      const sc = s * (0.55 + rnd() * 0.5) * (j === 2 || j === 3 ? 1.3 : 1);
+      d.position.set(cx + ox * Math.cos(a), cy + oy, cz - ox * Math.sin(a));
+      d.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3);
+      d.scale.set(sc, sc * 0.55, sc * 0.8);
+      d.updateMatrix(); mesh.setMatrixAt(k++, d.matrix);
+    }
+  }
+  mesh.count = k; mesh.frustumCulled = false; mesh.renderOrder = -9;
   return mesh;
 }
 
@@ -185,20 +206,22 @@ export function buildWorld(scene, renderer) {
   const sky = makeSkyDome(1000);
   scene.add(sky);
   world.sky = sky;
+  world.clouds = makeClouds(mulberry32(7));
+  scene.add(world.clouds);
   const pmrem = new THREE.PMREMGenerator(renderer);
   const envScene = new THREE.Scene();
   envScene.add(makeSkyDome(50));
-  const envGround = new THREE.Mesh(new THREE.CircleGeometry(49, 24), new THREE.MeshBasicMaterial({ color: 0x3b4a2c }));
+  const envGround = new THREE.Mesh(new THREE.CircleGeometry(49, 24), new THREE.MeshBasicMaterial({ color: 0x4a5a30 }));
   envGround.rotation.x = -Math.PI / 2; envGround.position.y = -2; envScene.add(envGround);
   scene.environment = pmrem.fromScene(envScene, 0.04).texture;
   scene.environmentIntensity = 0.55;
-  scene.fog = new THREE.FogExp2(new THREE.Color().setRGB(0.715, 0.705, 0.69, THREE.LinearSRGBColorSpace), 0.0026); // tuned so fully-fogged land matches the rendered sky horizon // = sky horizon, so distant land melts into the murk
+  scene.fog = new THREE.FogExp2(new THREE.Color().setRGB(SKY_HORIZON[0] * FOG_K + 0.055, SKY_HORIZON[1] * FOG_K + 0.03, SKY_HORIZON[2] * FOG_K, THREE.LinearSRGBColorSpace), 0.0015); // tuned so fully-fogged land matches the rendered sky horizon // = sky horizon, so distant land melts into the murk
   const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 52), THREE.MathUtils.degToRad(160));
   world.sunDir = sun.clone();
 
-  const hemi = new THREE.HemisphereLight(0xeee6d6, 0x56603a, 1.15);
+  const hemi = new THREE.HemisphereLight(0xdfe9f5, 0x5d6338, 1.1);
   scene.add(hemi);
-  const sunL = new THREE.DirectionalLight(0xffe2bc, 2.1);
+  const sunL = new THREE.DirectionalLight(0xffd6a0, 2.5);
   sunL.castShadow = true;
   sunL.shadow.mapSize.set(2048, 2048);
   const sc = sunL.shadow.camera; sc.left = -38; sc.right = 38; sc.top = 38; sc.bottom = -38; sc.near = 1; sc.far = 220;

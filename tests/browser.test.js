@@ -33,6 +33,10 @@ for (let i = 0; i < (process.env.QUICK ? 3 : 6); i++) {
 const popups = await page.evaluate(() => document.querySelectorAll('.hud-msg.show, .feed-item, .hud-hint.show').length);
 console.log('in-race popups visible:', popups);
 if (popups) { console.log('FAIL: popups are visible during the race'); process.exitCode = 1; }
+// overtake callouts: small, top-right corner, at most one at a time
+const callouts = await page.evaluate(() => [...document.querySelectorAll('.hud')].map((h) => { const c = [...h.querySelectorAll('.hud-callout.show')]; const r = c[0] && c[0].getBoundingClientRect(); return { n: c.length, right: r ? innerWidth - r.right : null, top: r ? r.top : null, h: r ? r.height : null }; }));
+console.log('overtake callouts:', JSON.stringify(callouts));
+if (callouts.some((c) => c.n > 1 || (c.n && (c.top > 160 || c.h > 40 || c.right > 60)))) { console.log('FAIL: callout not a single small corner note'); process.exitCode = 1; }
 // roll-jump through the real keyboard path: knock the player over at speed, press Space mid-tumble
 const rj = await page.evaluate(async () => {
   const g = window.__cc.game, C = window.__cc.Core, me = g.race.racers.find((r) => r.id === 'p1');

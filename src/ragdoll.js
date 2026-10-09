@@ -40,6 +40,15 @@ export class Ragdoll {
       const [a, b] = STICKS[s];
       this.len[s] = Math.hypot(this.p[a * 3] - this.p[b * 3], this.p[a * 3 + 1] - this.p[b * 3 + 1], this.p[a * 3 + 2] - this.p[b * 3 + 2]);
     }
+    // max distance of every particle from the pelvis (with slack): a hard guard against the body coming apart
+    // (shortest path along the bones = the furthest a particle can physically get from the pelvis)
+    const R = new Float64Array(N).fill(1e9); R[0] = 0;
+    for (let pass = 0; pass < N; pass++) for (let s = 0; s < STICKS.length; s++) {
+      const [a, b] = STICKS[s];
+      if (R[a] + this.len[s] < R[b]) R[b] = R[a] + this.len[s];
+      if (R[b] + this.len[s] < R[a]) R[a] = R[b] + this.len[s];
+    }
+    this.maxR = R.map((r) => r * 1.03 + 0.02);
     this.active = true; this.acc = 0; this.t = 0;
   }
   // add a velocity (+ optional spin about the centroid) to every particle, e.g. a roll-jump launch
@@ -55,11 +64,30 @@ export class Ragdoll {
   center() { const p = this.p; return [(p[0] + p[3]) / 2, (p[1] + p[4]) / 2, (p[2] + p[5]) / 2]; }
   // advance by dt (fixed internal 1/120 steps). tether: [x,y,z] the body centre should follow (or null)
   update(dt, tether, flail = 1) {
-    this.acc += Math.min(dt, 0.1);
+    // big frame times (low FPS / tab switch) are split into fixed substeps; anything beyond ~0.13 s is dropped
+    this.acc = Math.min(this.acc + Math.max(0, dt), 0.135);
     const h = 1 / 120;
     let n = 0;
     this.impact = 0;
     while (this.acc >= h && n < 16) { this.step(h, tether, flail); this.acc -= h; n++; }
+    this.harden();
+    if (!Number.isFinite(this.p[0] + this.p[1] + this.p[2]) && tether) { // never let a NaN leak into the rig
+      for (let i = 0; i < N * 3; i++) { this.p[i] = tether[i % 3]; this.o[i] = this.p[i]; }
+    }
+  }
+  // exact projection of the bones + reach clamp: run after the soft solver so the drawn rig is always intact
+  harden() {
+    for (let pass = 0; pass < 2; pass++) for (let s = 0; s < STICKS.length; s++) {
+      const [a, b] = STICKS[s], ka = a * 3, kb = b * 3, p = this.p;
+      const d = Math.hypot(p[kb] - p[ka], p[kb + 1] - p[ka + 1], p[kb + 2] - p[ka + 2]);
+      if (Math.abs(d - this.len[s]) > this.len[s] * 0.04) this.solve(a, b, this.len[s], 0);
+    }
+    const p = this.p, o = this.o;
+    for (let i = 1; i < N; i++) {
+      const k = i * 3, dx = p[k] - p[0], dy = p[k + 1] - p[1], dz = p[k + 2] - p[2];
+      const d = Math.hypot(dx, dy, dz), m = this.maxR[i];
+      if (d > m) { const f = m / d; const nx = p[0] + dx * f, ny = p[1] + dy * f, nz = p[2] + dz * f; o[k] += nx - p[k]; o[k + 1] += ny - p[k + 1]; o[k + 2] += nz - p[k + 2]; p[k] = nx; p[k + 1] = ny; p[k + 2] = nz; }
+    }
   }
   step(h, tether, flail) {
     const p = this.p, o = this.o;
@@ -90,7 +118,7 @@ export class Ragdoll {
         for (let i = 0; i < N; i++) { p[i * 3] += dx * a; p[i * 3 + 1] += ty * a; p[i * 3 + 2] += dz * a; o[i * 3] += dx * b; o[i * 3 + 1] += ty * b; o[i * 3 + 2] += dz * b; }
       }
     }
-    for (let it = 0; it < 8; it++) {
+    for (let it = 0; it < 10; it++) {
       for (let s = 0; s < STICKS.length; s++) {
         const [a, b] = STICKS[s];
         this.solve(a, b, this.len[s], 0);

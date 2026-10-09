@@ -28,21 +28,26 @@ throws themselves down after it. Inspired by the traditional cheese-rolling race
 | Mute sound | `M` | | |
 | Quit / next heat | `Esc` / `R` on the results screen | | |
 
-**How to win:** grab the cheese or be first over the finish line. Each match is **best of 3 heats**, with a running
-scoreboard (heat wins first, then points: 3 for 1st, 2 for 2nd, 1 for 3rd). The match ends when someone wins 2 heats.
+**How to win:** grab the cheese or be first over the finish line. A match is **3 heats decided on points only**
+(10/7/5/3/2/1 by placing; ties go to the better best placing). The results screen shows the gap to the winner in
+metres and seconds and flashes the points you just earned. `R` / NEXT HEAT is focused, so Enter works too.
 
 **Movement:**
 * The hill speeds you up on its own. Above about 38 km/h, or when you yank the steering at speed, your **BALANCE**
   bar fills. When it's full you go over.
-* **Rolling is fast.** A tumbling runner has full gravity along the slope and very little friction, so they keep
-  or gain momentum (about 60 km/h on the steep face). While you roll, `Space` launches a **roll-jump** up and forward
-  toward the cheese, and you can steer in the air. A flying roll-jump that reaches the cheese grabs it automatically,
-  just like a dive.
-* A well-timed jump on smooth ground lands **clean**, with a small speed boost. Landing hard or off a lump sends you
-  rolling. You get up automatically once you slow down, or press `Space` to get up sooner.
-* The cheese runs away on the steep face and slows on the run-out, so it's usually caught near the bottom. Races
-  last about 30 to 35 s. AI racers can't grab the cheese for the first 13 s, and they're lightly rubber-banded
-  around the leading human.
+* **Rolling keeps its speed.** A tumbling runner goes about as fast as a runner (within ~10%, checked by the sim test),
+  so a fall costs little but isn't an exploit. While you roll, `Space` launches a **roll-jump** up and forward toward
+  the cheese (2 charges, max one per 0.8 s, never faster than a sprint), and you can steer in the air. A flying
+  roll-jump that reaches the cheese grabs it automatically, just like a dive.
+* Jumps have a 2 s cooldown. A jump only lands **clean** on a soft landing (impact under 5.5 m/s), and it only gives
+  a speed boost if you took off within about 0.25 s of a crest. Hard landings send you rolling. You get up
+  automatically once you slow down, or press `Space` to get up sooner (0.6 s).
+* The cheese gets a 2 s head start. It's capped at about 15 m/s and bogs down on the shallower ledge (z 170 to 200),
+  which is where the pack usually first reaches it. Heats last about 25 to 35 s including the countdown.
+* AI racers can't grab the cheese for the first 13 s. The rubber band is weak and symmetric: each bot keeps a gap of
+  -6 to +8 m to you with at most ±3 m/s² of help, and none while tumbling, within 30 m of the cheese, or past z 300.
+  Bots only grab rivals who are ahead of them and near the cheese (rare, 5 s cooldown), and nobody can be tripped
+  within 1.5 s of getting up.
 
 ### The hill
 The course is about 390 m of English hillside, modelled on the profile of a real cheese-rolling hill: a convex top,
@@ -119,7 +124,10 @@ and human cheese grabs get +0.5 m of lag-compensating reach.
 
 ## Tests
 ```bash
-npm test                                                # core sim + server/WebSocket protocol test
+npm test                                                # core sim + balance (win rates / heat length) + server protocol
+node tests/strategy.sim.mjs                             # win rate by player strategy (idle/hold/holdShift/smart/jumpSpam/best)
+node tests/cheese.sim.mjs                               # cheese pacing: first contact / catch positions in AI-only races
+node tests/ragdoll.shots.js                             # tumble + roll-jump rig screenshots (SOLO=1 hides the AI)
 node tests/net.test.js https://<your-service>.onrender.com   # protocol test against a deployed server
 CHROME=/path/to/chrome npm run test:browser             # headless browser: menu, solo, roll-jump, results, next heat, split-screen
 node tests/feel.shots.js                                # camera/HUD screenshots (SOLO=1 hides the AI)
@@ -129,20 +137,24 @@ node tests/online.browser.test.js http://localhost:8797 # two headless browsers 
 ### Art direction
 Stylized low-poly look: faceted, flat-shaded terrain with per-face vertex colours (fresh greens, chocolate mud,
 patchwork fields), chunky low-poly trees, hedges, rocks, fences, crowd, grass clumps, and a faceted cheese wheel.
-The lighting is warm overcast with crisp soft shadows. With a single view at high quality, there's subtle
+The lighting is warm late-morning sun with crisp soft shadows under a blue gradient sky with chunky low-poly
+clouds; the fog colour is matched to the horizon so distant land melts into the haze. With a single view at high quality, there's subtle
 post-processing: soft bloom, ACES tone mapping, a light colour grade, and SMAA. Every mode gets a CSS vignette
 (`?post=0` turns the post-processing off).
 
 ### AI
 The bots steer at where the cheese *will* be (its position plus lead), and they race in a pack around you: each one
-holds its own gap, mostly a few metres ahead of you between you and the cheese, using a gentle rubber band. That
-keeps them on screen. In the sim test, bots are on camera about 70% of the time for a fast player and 100% for a
-slow one, with a mean distance of 13 to 15 m. You start in the middle of the line with the bots either side.
+holds its own gap of -6 to +8 m from you, using a weak symmetric rubber band, so they stay near you but skill decides
+the heat. In the strategy sim (40 seeds), sensible play wins about 60% of heats, while holding W wins 0% and
+jump-spam about 5%. You start in the middle of the line with the bots either side.
 
 ### Camera, HUD, sound
 A low, close chase camera looks down the slope and leads fast runners so they stay in frame. The field of view widens
-with speed, and you get speed lines, a light shake on bumps, and a slow orbit after the race. There are no in-race text popups. You only get the countdown, the HUD bars and the results screen. The cheese has a pulsing glow and pin, plus an edge-of-screen
-arrow when it's off camera. A big wipeout gives half a second of slow-mo (offline only). Sound is synthesized with
+with speed (capped at 85°), and you get speed lines, a light shake on bumps, and a slow orbit on the downhill side
+after the race. There are no centre-screen popups. The only in-race text is a tiny top-right note when someone
+overtakes you or you pass someone (one at a time), plus small gold/silver/bronze name tags over the top 3. The
+cheese has a bright outline, a light beam, a bobbing marker that stays the same size on screen, and an
+edge-of-screen arrow when it's off camera. A big wipeout gives half a second of slow-mo (offline only). Sound is synthesized with
 WebAudio: footsteps, thuds, wind that rises with speed, the crowd, and a roar on the catch. It starts on your first
 key press.
 

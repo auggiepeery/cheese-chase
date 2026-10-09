@@ -143,6 +143,7 @@ function makeHud(label, splitIdx, splitCount) {
     <div class="hud-tr"><div class="pos">1<sup>st</sup></div><div class="of"></div></div>
     <div class="speedlines"></div>
     <div class="hud-feed"></div>
+    <div class="hud-callout"></div>
     <div class="hud-msg"></div>
     <div class="hud-hint"></div>
     <div class="cheese-arrow">🧀<i>➤</i></div>
@@ -152,7 +153,7 @@ function makeHud(label, splitIdx, splitCount) {
       <div class="charges" title="roll-jumps"></div>
       <div class="cheese-dist"></div></div>`;
   $('#huds').appendChild(el);
-  return { el, timer: el.querySelector('.timer'), pos: el.querySelector('.pos'), of: el.querySelector('.of'), msg: el.querySelector('.hud-msg'), hint: el.querySelector('.hud-hint'), speed: el.querySelector('.speed b'), meter: el.querySelector('.meter-fill'), stam: el.querySelector('.stam-fill'), cdist: el.querySelector('.cheese-dist'), charges: el.querySelector('.charges'), lines: el.querySelector('.speedlines'), arrow: el.querySelector('.cheese-arrow'), arrowI: el.querySelector('.cheese-arrow i'), feed: el.querySelector('.hud-feed'), msgT: 0 };
+  return { el, timer: el.querySelector('.timer'), pos: el.querySelector('.pos'), of: el.querySelector('.of'), msg: el.querySelector('.hud-msg'), hint: el.querySelector('.hud-hint'), speed: el.querySelector('.speed b'), meter: el.querySelector('.meter-fill'), stam: el.querySelector('.stam-fill'), cdist: el.querySelector('.cheese-dist'), charges: el.querySelector('.charges'), lines: el.querySelector('.speedlines'), arrow: el.querySelector('.cheese-arrow'), arrowI: el.querySelector('.cheese-arrow i'), feed: el.querySelector('.hud-feed'), callout: el.querySelector('.hud-callout'), msgT: 0, calloutT: 0, calloutCd: 0 };
 }
 // in-race text popups were removed on request: these stay as no-ops so event handling remains simple
 const POPUPS = false;
@@ -208,7 +209,7 @@ function newMatch(mode) {
     taken.add(ch);
     roster.push({ id: 'ai' + i, name: names[i], char: ch, ai: true });
   }
-  return { mode, heat: 0, roster, wins: {}, points: {}, done: false };
+  return { mode, heat: 0, roster, points: {}, best: {}, done: false };
 }
 function startOffline(mode, nextHeat = false) {
   clearRaceViews();
@@ -226,7 +227,7 @@ function startOffline(mode, nextHeat = false) {
   for (const r of race.racers) Core.placeAtStart(race, r);
   for (const r of race.racers) {
     const isP = !r.ai;
-    ensureRacerView(r, isP ? (humans === 1 ? 'YOU' : r.id.toUpperCase()) : r.name, isP ? '#ffd34d' : '#ffffff');
+    ensureRacerView(r, isP ? (humans === 1 ? 'YOU' : r.id.toUpperCase()) : null, isP ? '#ffd34d' : '#ffffff'); // bots: only the small top-3 tags
   }
   if (humans === 1) addView('p1', 'YOU', controllers.solo, 0, 1);
   else { addView('p1', 'PLAYER 1  (WASD)', controllers.p1, 0, 2); addView('p2', 'PLAYER 2  (ARROWS)', controllers.p2, 1, 2); }
@@ -259,7 +260,7 @@ function stateFromRacer(r) {
   return { x: r.x, y: r.y, z: r.z, vy: r.vy, stamina: r.stamina, yaw: r.heading, pitch: r.spin, roll: r.roll, state: r.state, st: r.st, vx: r.vx, vz: r.vz, meter: r.meter, grounded: r.grounded,
     flags: Core.racerFlags(r) };
 }
-const racerSummary = (r) => ({ id: r.id, name: r.name, char: r.char, x: r.x, y: r.y, z: r.z, vx: r.vx, vz: r.vz, state: r.state, meter: r.meter, stamina: r.stamina, st: r.st, charges: r.charges, ai: !!r.ai, finished: r.finished });
+const racerSummary = (r) => ({ id: r.id, name: r.name, char: r.char, x: r.x, y: r.y, z: r.z, vx: r.vx, vz: r.vz, state: r.state, meter: r.meter, stamina: r.stamina, st: r.st, charges: r.charges, ai: !!r.ai, finished: r.finished, finishTime: r.finishTime });
 
 // ---------------------------------------------------------------------------
 // events -> effects/messages (shared by offline and online)
@@ -330,8 +331,30 @@ function audioNear(p) { return game.views.some((v) => v.camPos && v.camPos.dista
 // ---------------------------------------------------------------------------
 const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : (n % 10 < 4 ? n % 10 : 0)] || 'th');
 function fmtTime(t) { t = Math.max(0, t); const m = Math.floor(t / 60), s = t - m * 60; return `${m}:${s < 10 ? '0' : ''}${s.toFixed(2)}`; }
+// top-3 place tags over other racers, plus ONE tiny corner callout for overtakes that involve this player
+let _hudPrevT = performance.now();
+function updateTagsAndCallouts(phase, sorted) {
+  const now = performance.now(), dt = Math.min(0.1, (now - _hudPrevT) / 1000); _hudPrevT = now;
+  const localIds = game.views.map((v) => v.racerId);
+  sorted.forEach((r, i) => { const rv = game.racerViews.get(r.id); if (rv) rv.setTag(phase === 'race' && i < 3 && !localIds.includes(r.id) ? i + 1 : 0, r.name); });
+  for (const v of game.views) {
+    const h = v.hud;
+    if (h.calloutT > 0) { h.calloutT -= dt; if (h.calloutT <= 0) h.callout.className = 'hud-callout'; }
+    h.calloutCd = Math.max(0, h.calloutCd - dt);
+    const idx = sorted.findIndex((r) => r.id === v.racerId);
+    if (idx < 0 || phase !== 'race') { v.prevAhead = null; continue; }
+    const ahead = new Set(sorted.slice(0, idx).map((r) => r.id));
+    if (v.prevAhead && h.calloutCd <= 0 && h.calloutT <= 0) {
+      let msg = null;
+      for (const id of ahead) if (!v.prevAhead.has(id)) { msg = `${nameOf(id)} overtakes you`; break; }
+      if (!msg) for (const id of v.prevAhead) if (!ahead.has(id) && sorted.some((r) => r.id === id)) { msg = `You pass ${nameOf(id)}`; break; }
+      if (msg) { h.callout.textContent = msg; h.callout.className = 'hud-callout show' + (msg.startsWith('You') ? ' good' : ''); h.calloutT = 1.8; h.calloutCd = 3.5; }
+    }
+    if (h.calloutCd <= 0 || !v.prevAhead) v.prevAhead = ahead; // hold the baseline during the cooldown so flip-flops don't spam
+  }
+}
 function updateHUDs(phase, cd, raceT, racers, cheese) {
-  const sorted = [...racers].sort((a, b) => b.z - a.z);
+  const sorted = Core.rankRacers(racers, null);
   for (const v of game.views) {
     const me = racers.find((r) => r.id === v.racerId);
     const h = v.hud;
@@ -365,6 +388,7 @@ function updateHUDs(phase, cd, raceT, racers, cheese) {
     if (!POPUPS) hint = '';
     h.hint.textContent = hint; h.hint.className = 'hud-hint' + (hint ? ' show' : '') + (hint.startsWith('GRAB IT') ? ' hot' : '');
   }
+  updateTagsAndCallouts(phase, sorted);
   // countdown
   const cdEl = $('#countdown');
   if (phase === 'countdown') {
@@ -397,7 +421,7 @@ function updateCamera(v, dt, phase) {
   const sp = rv && rv.lastSp || 0;
   const tumbling = rv && (rv.lastState === ST.TUMBLE || rv.lastState === ST.DIVE);
   // low, close chase cam; post-race slow orbit
-  if (over) v.orbitA = (v.orbitA ?? 0) + dt * 0.35;
+  if (over) { v.orbitT = (v.orbitT ?? 0) + dt; v.orbitA = 1.1 * Math.sin(v.orbitT * 0.3); } else v.orbitT = 0; // swing across the DOWNHILL side, facing the winner
   // ~6 m back along the slope (shorter on the steep face so the runner stays big), ~4.5 m up
   const slope = Math.max(0, (height(p.x, p.z - 3) - height(p.x, p.z + 3)) / 6);
   const behind = (phase === 'countdown' ? 6.5 : 6 + Math.min(1, sp * 0.05)) / (1 + slope * 0.45);
@@ -408,17 +432,17 @@ function updateCamera(v, dt, phase) {
   v.prevP = (v.prevP || new THREE.Vector3()).copy(p);
   const lead = over ? 0 : 1 / rate;
   const desired = over
-    ? _tmpV.set(p.x + Math.sin(v.orbitA) * 8, p.y + 3.2, p.z + Math.cos(v.orbitA) * 8)
+    ? _tmpV.set(p.x + Math.sin(v.orbitA) * 9, p.y + 2.5, p.z + Math.cos(v.orbitA) * 9)
     : _tmpV.set(p.x * 0.85 + v.vel.x * lead, p.y + (tumbling ? 3.8 : 4.5) + v.vel.y * lead, p.z - behind + v.vel.z * lead);
   desired.y = Math.max(desired.y, height(desired.x, desired.z) + 1.6);
-  if (!v.camPos) v.camPos = desired.clone();
+  if (!v.camPos || v.camPos.distanceTo(desired) > 35) v.camPos = desired.clone(); // snap after a teleport / restart
   const k = 1 - Math.exp(-rate * dt);
   v.camPos.lerp(desired, k);
   v.camPos.y = Math.max(v.camPos.y, height(v.camPos.x, v.camPos.z) + 1.0);
-  // look ahead and down: the gaze follows ~50% of the slope so the hill reads steep
+  // look ahead and down: the gaze follows ~60% of the slope (tilted down a touch so the hill, not the sky, fills the frame)
   const ahead = 10, lz = p.z + ahead;
   const groundDrop = p.y - height(p.x, lz);
-  const look = over ? new THREE.Vector3(p.x, p.y + 1.0, p.z) : new THREE.Vector3(p.x * 0.95 + v.vel.x * lead, p.y + 1.0 - groundDrop * 0.5 + v.vel.y * lead, lz + v.vel.z * lead);
+  const look = over ? new THREE.Vector3(p.x, p.y + 1.0, p.z) : new THREE.Vector3(p.x * 0.95 + v.vel.x * lead, p.y + 0.7 - groundDrop * 0.62 + v.vel.y * lead, lz + v.vel.z * lead);
   v.look.lerp(look, 1 - Math.exp(-(tumbling ? 5 : 8) * dt));
   v.cam.position.copy(v.camPos);
   // shake: bumps/landings plus a light rumble at speed
@@ -427,9 +451,9 @@ function updateCamera(v, dt, phase) {
   if (sh > 0) { v.cam.position.x += (Math.random() - 0.5) * sh; v.cam.position.y += (Math.random() - 0.5) * sh; }
   v.shake = Math.max(0, v.shake - dt * 1.5);
   v.cam.lookAt(v.look);
-  // FOV kick with speed (up to +16)
+  // FOV kick with speed (up to +16), hard cap 85 deg so it never goes fisheye
   v.fovPunch = Math.max(0, (v.fovPunch || 0) - dt * 14);
-  v.cam.fov += ((60 + Math.min(16, Math.max(0, sp - 5) * 0.9) + v.fovPunch) - v.cam.fov) * (1 - Math.exp(-(v.fovPunch > 0 ? 8 : 3) * dt));
+  v.cam.fov += (Math.min(85, 60 + Math.min(16, Math.max(0, sp - 5) * 0.9) + v.fovPunch) - v.cam.fov) * (1 - Math.exp(-(v.fovPunch > 0 ? 8 : 3) * dt));
   v.cam.updateProjectionMatrix();
   // hud message timers
   if (v.hud.msgT > 0) { v.hud.msgT -= dt; if (v.hud.msgT <= 0) v.hud.msg.className = 'hud-msg'; }
@@ -454,24 +478,38 @@ let cheeseHeld = false;
 const cheeseGlow = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 64;
   const g = c.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-  gr.addColorStop(0, 'rgba(255,230,120,0.9)'); gr.addColorStop(0.4, 'rgba(255,200,60,0.35)'); gr.addColorStop(1, 'rgba(255,200,60,0)');
+  gr.addColorStop(0, 'rgba(255,240,150,1)'); gr.addColorStop(0.35, 'rgba(255,205,60,0.55)'); gr.addColorStop(1, 'rgba(255,200,60,0)');
   g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, depthTest: true, transparent: true, fog: false }));
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, depthTest: true, transparent: true, fog: false, toneMapped: false }));
   sp.renderOrder = 10; scene.add(sp);
-  const pin = new THREE.Sprite(new THREE.SpriteMaterial({ map: (() => { const t = document.createElement('canvas'); t.width = 64; t.height = 64; const q = t.getContext('2d'); q.fillStyle = '#ffd34d'; q.strokeStyle = '#5a3a00'; q.lineWidth = 5; q.beginPath(); q.moveTo(10, 8); q.lineTo(54, 8); q.lineTo(32, 56); q.closePath(); q.stroke(); q.fill(); return new THREE.CanvasTexture(t); })(), depthTest: false, transparent: true, fog: false }));
-  pin.renderOrder = 11; scene.add(pin);
+  // bobbing marker: constant on-screen size (sizeAttenuation off), drawn over everything
+  const t = document.createElement('canvas'); t.width = 96; t.height = 112; const q = t.getContext('2d');
+  q.lineJoin = 'round'; q.lineWidth = 9; q.strokeStyle = '#3a2400'; q.fillStyle = '#ffd34d';
+  q.beginPath(); q.arc(48, 40, 32, 0, Math.PI * 2); q.stroke(); q.fill();
+  q.beginPath(); q.moveTo(30, 70); q.lineTo(66, 70); q.lineTo(48, 104); q.closePath(); q.stroke(); q.fill();
+  q.font = 'bold 40px sans-serif'; q.textAlign = 'center'; q.textBaseline = 'middle'; q.fillText('🧀', 48, 42);
+  const tex = new THREE.CanvasTexture(t); tex.colorSpace = THREE.SRGBColorSpace;
+  const pin = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, fog: false, sizeAttenuation: false, toneMapped: false }));
+  pin.center.set(0.5, 0); pin.renderOrder = 11; scene.add(pin);
   return { sp, pin };
 })();
 function updateCheeseGlow(t) {
   const on = !!game.mode && !cheeseHeld;
-  cheeseGlow.sp.visible = cheeseGlow.pin.visible = on;
+  cheeseGlow.sp.visible = cheeseGlow.pin.visible = cheeseView.beam.visible = on;
   if (!on) return;
   const p = cheeseView.group.position;
   const inReach = game.views.some((v) => { const rv = game.racerViews.get(v.racerId); return rv && rv.root.position.distanceTo(p) < 2.6; });
   const pulse = 1 + Math.sin(t * (inReach ? 14 : 6)) * (inReach ? 0.3 : 0.18);
-  cheeseGlow.sp.material.color.setHex(inReach ? 0x9dff6a : 0xffffff);
-  cheeseGlow.sp.position.copy(p); cheeseGlow.sp.scale.setScalar(2.6 * pulse);
-  cheeseGlow.pin.position.set(p.x, p.y + 1.5 + Math.sin(t * 4) * 0.15, p.z); cheeseGlow.pin.scale.setScalar(0.7);
+  cheeseGlow.sp.material.color.setHex(inReach ? 0x9dff6a : 0xffe08a);
+  cheeseView.hull.material.color.setHex(inReach ? 0xb8ff8a : 0xfff1a0);
+  // beam + glow fade in with distance from the nearest local camera: a beacon from afar, not a blinding blaze up close
+  let dmin = 1e9; for (const v of game.views) if (v.camPos) dmin = Math.min(dmin, v.camPos.distanceTo(p));
+  const far = Math.max(0, Math.min(1, (dmin - 8) / 22));
+  cheeseView.beam.material.opacity = 0.18 + 0.72 * far;
+  cheeseGlow.sp.material.opacity = 0.35 + 0.65 * far;
+  cheeseGlow.sp.position.copy(p); cheeseGlow.sp.scale.setScalar((1.8 + 1.8 * far) * pulse);
+  cheeseGlow.pin.position.set(p.x, p.y + 1.2 + Math.sin(t * 4) * 0.25, p.z);
+  const ps = game.views.length > 1 ? 0.11 : 0.085; cheeseGlow.pin.scale.set(ps * 96 / 112, ps, 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -483,7 +521,7 @@ function maybeShowResults(result, racers, dt) {
   if (game.resultT < 2.6) return;
   game.resultsShown = true;
   const localIds = game.views.map((v) => v.racerId);
-  const sorted = [...racers].sort((a, b) => (a.id === result.id ? -1 : b.id === result.id ? 1 : b.z - a.z));
+  const sorted = Core.rankRacers(racers, result);
   const winnerLocal = localIds.includes(result.id);
   let title;
   if (winnerLocal) title = result.how === 'cheese' ? (localIds.length > 1 ? `${nameOf(result.id)} CAUGHT THE CHEESE!` : 'YOU CAUGHT THE CHEESE!') : (localIds.length > 1 ? `${nameOf(result.id)} WINS!` : 'YOU WIN!');
@@ -491,27 +529,34 @@ function maybeShowResults(result, racers, dt) {
   $('#res-title').textContent = title;
   $('#res-title').className = winnerLocal ? 'win' : 'lose';
   $('#res-sub').textContent = (result.how === 'cheese' ? 'Cheese snatched' : result.how === 'finish' ? 'First across the line' : 'Time limit') + ` in ${fmtTime(result.time)}`;
+  // gaps to the winner, in metres and (estimated at the winner's average pace) seconds
+  const lead = sorted[0], avgV = Math.max(4, ((lead ? lead.z : 0) + 4) / Math.max(1, result.time));
+  const M = game.mode !== 'online' ? game.match : null;
+  const earned = {};
+  sorted.forEach((r, i) => { earned[r.id] = Core.HEAT_POINTS[i] || 0; });
   let rows = '';
   sorted.forEach((r, i) => {
     const local = localIds.includes(r.id);
-    const status = r.id === result.id ? (result.how === 'cheese' ? '🧀 caught it' : '🏆 winner') : `${Math.max(0, FINISH_Z - r.z).toFixed(0)} m to go`;
-    rows += `<tr class="${local ? 'me' : ''}"><td>${i + 1}</td><td>${escapeHtml(r.name)}${r.ai ? ' <small>(AI)</small>' : ''}</td><td>${CHARACTERS[r.char % CHARACTERS.length].name}</td><td>${status}</td></tr>`;
+    let status;
+    if (i === 0) status = r.id === result.id ? (result.how === 'cheese' ? '🧀 caught it' : '🏆 winner') : 'leader';
+    else if (r.finished && lead.finished && r.finishTime && lead.finishTime) status = `+${(r.finishTime - lead.finishTime).toFixed(2)} s`;
+    else { const gm = Math.max(0, lead.z - r.z); status = `+${gm < 10 ? gm.toFixed(1) : gm.toFixed(0)} m · +${(gm / avgV).toFixed(1)} s`; }
+    const pts = M ? `<td class="pts">${local ? `<span class="earn">+${earned[r.id]}</span>` : `+${earned[r.id]}`}</td>` : '';
+    rows += `<tr class="${local ? 'me' : ''}"><td>${i + 1}</td><td>${escapeHtml(r.name)}${r.ai ? ' <small>(AI)</small>' : ''}</td><td>${CHARACTERS[r.char % CHARACTERS.length].name}</td><td>${status}</td>${pts}</tr>`;
   });
   $('#res-table').innerHTML = rows;
   // best-of-3 heats (offline)
-  const M = game.mode !== 'online' ? game.match : null;
+  // best of 3 heats, decided on POINTS only (every heat is played)
   if (M && !M.scored) {
     M.scored = true;
-    const order = [...racers].sort((a, b) => (a.id === result.id ? -1 : b.id === result.id ? 1 : b.z - a.z));
-    order.forEach((r, i) => { M.points[r.id] = (M.points[r.id] || 0) + Math.max(0, 3 - i); });
-    if (result.id != null) M.wins[result.id] = (M.wins[result.id] || 0) + 1;
-    if (Object.values(M.wins).some((w) => w >= 2) || M.heat >= 3) M.done = true;
+    sorted.forEach((r, i) => { M.points[r.id] = (M.points[r.id] || 0) + earned[r.id]; M.best[r.id] = Math.min(M.best[r.id] ?? 99, i); });
+    if (M.heat >= 3) M.done = true;
   }
   if (M) {
-    const board = [...M.roster].sort((a, b) => (M.wins[b.id] || 0) - (M.wins[a.id] || 0) || (M.points[b.id] || 0) - (M.points[a.id] || 0));
+    const board = [...M.roster].sort((a, b) => (M.points[b.id] || 0) - (M.points[a.id] || 0) || (M.best[a.id] ?? 99) - (M.best[b.id] ?? 99) || (a.id < b.id ? -1 : 1));
     const champ = M.done ? board[0] : null;
-    $('#res-board').innerHTML = `<div class="board-title">${M.done ? '🏆 MATCH WINNER: ' + escapeHtml(champ.name) : `Heat ${M.heat} of 3 — first to 2 heat wins`}</div>` +
-      '<div class="chips">' + board.map((r) => `<span class="chip${localIds.includes(r.id) ? ' me' : ''}">${escapeHtml(r.name)} ${'🏆'.repeat(M.wins[r.id] || 0)} <small>${M.points[r.id] || 0} pts</small></span>`).join('') + '</div>';
+    $('#res-board').innerHTML = `<div class="board-title">${M.done ? '🏆 MATCH WINNER: ' + escapeHtml(champ.name) + ` (${M.points[champ.id] || 0} pts)` : `Heat ${M.heat} of 3 — most points after 3 heats wins (${Core.HEAT_POINTS.join('/')})`}</div>` +
+      '<div class="chips">' + board.map((r, i) => `<span class="chip${localIds.includes(r.id) ? ' me' : ''}">${i + 1}. ${escapeHtml(r.name)} <b>${M.points[r.id] || 0}</b> pts${localIds.includes(r.id) ? ` <span class="earn">+${earned[r.id]}</span>` : ''}</span>`).join('') + '</div>';
     $('#btn-again').textContent = M.done ? 'NEW MATCH (R)' : `NEXT HEAT ${M.heat + 1}/3 (R)`;
   } else { $('#res-board').innerHTML = ''; $('#btn-again').textContent = 'RACE AGAIN (R)'; }
   if (winnerLocal && game.mode !== 'online') {
@@ -523,6 +568,7 @@ function maybeShowResults(result, racers, dt) {
   if (game.mode === 'online') { again.style.display = online.isHost ? '' : 'none'; $('#res-wait').style.display = online.isHost ? 'none' : ''; }
   else { again.style.display = ''; $('#res-wait').style.display = 'none'; }
   showScreen('#screen-results');
+  setTimeout(() => { if (again.style.display !== 'none') again.focus(); }, 30);
 }
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -620,7 +666,7 @@ function startOnlineRace(m) {
   for (const r of m.racers) Core.addRacer(pr, { id: r.id, name: r.name, char: r.char });
   game.race = pr;
   online.me = pr.racers.find((r) => r.id === online.id) || null;
-  for (const r of m.racers) ensureRacerView(r, r.id === online.id ? 'YOU' : r.name + (r.ai ? '' : ' ★'), r.id === online.id ? '#ffd34d' : r.ai ? '#ffffff' : '#9fe6ff');
+  for (const r of m.racers) ensureRacerView(r, r.id === online.id ? 'YOU' : r.ai ? null : r.name + ' ★', r.id === online.id ? '#ffd34d' : '#9fe6ff');
   addView(online.me ? online.id : null, online.me ? `YOU · ROOM ${online.code}` : `SPECTATING · ROOM ${online.code}`, online.me ? controllers.solo : null, 0, 1);
   online.predicting = false;
   game.resultsShown = false; game.resultT = 0; game.acc = 0;
@@ -719,7 +765,7 @@ function updateOnline(dt) {
     rv.apply(s, dt, particles); rv.lastSp = Math.hypot(s.vx, s.vz);
     rv.lastState = s.state; rv.lastGrounded = s.grounded;
     const ns2 = online.snaps.length ? online.snaps[online.snaps.length - 1].racers.get(r.id) : null;
-    summaries.push({ id: r.id, name: r.name, char: r.char, ai: r.ai, x: s.x, y: s.y, z: s.z, vx: s.vx, vz: s.vz, state: s.state, meter: s.meter, stamina: s.stamina, st: s.st, charges: ns2 ? ns2.charges : 2 });
+    summaries.push({ id: r.id, name: r.name, char: r.char, ai: r.ai, x: s.x, y: s.y, z: s.z, vx: s.vx, vz: s.vz, state: s.state, meter: s.meter, stamina: s.stamina, st: s.st, charges: ns2 ? ns2.charges : 2, finished: !!((s.flags | 0) & 8) });
   }
   // cheese: extrapolate to "now" so what you see is what the server checks
   const c = online.cheese;
@@ -952,7 +998,7 @@ function frame() {
     renderer.setScissorTest(false);
   } else {
     // attract mode: slow fly-down along the hill
-    cheeseGlow.sp.visible = cheeseGlow.pin.visible = false;
+    cheeseGlow.sp.visible = cheeseGlow.pin.visible = cheeseView.beam.visible = false;
     audio.update(0, 0, false);
     const z = 40 + ((t * 6) % (FINISH_Z - 40));
     if (window.__cc && window.__cc.lineupCam) { const L = window.__cc.lineupCam; menuCam.position.set(...L[0]); menuCam.lookAt(...L[1]); }

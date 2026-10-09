@@ -13,7 +13,7 @@ export const TRACK_HALF = 21.2;
 export const FENCE_X = 23.6;
 export const CHEESE_R = 0.5;
 export const CHEESE_HT = 0.17;     // half thickness of the wheel
-export const COUNTDOWN = 4.5;      // seconds; cheese released 1.5 s before racers
+export const COUNTDOWN = 4.5;      // seconds; cheese released 2 s before racers
 export const ST = { IDLE: 0, RUN: 1, DIVE: 2, TUMBLE: 3, GETUP: 4, CELEBRATE: 5 };
 const K_DRAG = 0.08, POWER = 6.0, SPRINT_POWER = 12.5, DANGER = 10.5, SLOPE_RUN = 0.5, SPRINT_TIME = 2.2;
 export const AI_GRAB_DELAY = 13, ROLL_CHARGES = 2, ROLL_RECHARGE = 2.5;
@@ -176,13 +176,15 @@ function applyImpulse(c, r, J) {
   c.vx += J[0] / CM; c.vy += J[1] / CM; c.vz += J[2] / CM;
   const t = cross(r, J); c.L[0] += t[0]; c.L[1] += t[1]; c.L[2] += t[2];
 }
+export let LEDGE_DRAG = +(globalThis.process?.env?.LEDGE ?? 0.25);
 function cheeseSub(race, c, h) {
   c.vy -= G * h;
   // the wheel runs away on the steep face (a head start the runners have to claw back on the run-out)
-  if (c.z < 372) { const sl = Math.min(1.1, Math.max(0, -gradient(c.x, c.z)[1])); c.vz += 5.5 * sl * h; }
+  if (c.z < 372) { const sl = Math.min(1.1, Math.max(0, -gradient(c.x, c.z)[1])); c.vz += 0.5 * sl * h; }
   // air drag + rolling resistance
   const sp = Math.hypot(c.vx, c.vy, c.vz);
-  const dk = Math.max(0, 1 - (0.012 * sp + 0.02) * h);
+  const ledge = c.z > 168 && c.z < 200 ? LEDGE_DRAG : 0; // the shallower ledge bogs it down: the natural place to catch it
+  const dk = Math.max(0, 1 - (0.019 * sp + 0.027 + ledge + (sp > 15 ? (sp - 15) * 0.25 : 0)) * h); // hard-ish cap ~15 m/s
   c.vx *= dk; c.vy *= dk; c.vz *= dk;
   const ld = 1 - 0.12 * h; c.L[0] *= ld; c.L[1] *= ld; c.L[2] *= ld;
   c.x += c.vx * h; c.y += c.vy * h; c.z += c.vz * h;
@@ -245,7 +247,7 @@ function stepCheese(race, dt) {
   c.maxImpact = 0;
 }
 function releaseCheese(race, c) {
-  c.released = true; c.vz = 6.5; c.vx = (race.rng() - 0.5) * 0.6;
+  c.released = true; c.vz = 7; c.vx = (race.rng() - 0.5) * 0.6;
   // spin to match rolling (axle = local x) plus a little random wobble
   const w = [c.vz / CHEESE_R, (race.rng() - 0.5) * 0.6, (race.rng() - 0.5) * 0.4];
   const l = qInvRot(c.q, w); c.L = qRot(c.q, [l[0] * IA, l[1] * ID, l[2] * ID]);
@@ -267,7 +269,7 @@ export function addRacer(race, { id, name, char = 0, ai = null }) {
 }
 export function makeAI(race) {
   const q = race.rng;
-  return { rubber: 1, pull: 0, pref: 3 + q() * 11, side: (q() * 2 - 1) * 5, caution: 0.3 + q() * 0.5, aggro: 0.1 + q() * 0.6, sprinty: 0.3 + q() * 0.6, wander: 1 + q() * 3, wf: 0.3 + q() * 0.5, ph: q() * 6, react: 0.6 + q() * 0.35, laneX: (q() * 2 - 1) * 6, fwdHold: 1, sprintHold: 0 };
+  return { rubber: 1, pull: 0, pref: -6 + q() * 14, side: (q() * 2 - 1) * 5, caution: 0.3 + q() * 0.5, aggro: 0.1 + q() * 0.6, sprinty: 0.3 + q() * 0.6, wander: 1 + q() * 3, wf: 0.3 + q() * 0.5, ph: q() * 6, react: 0.6 + q() * 0.35, laneX: (q() * 2 - 1) * 6, fwdHold: 1, sprintHold: 0 };
 }
 // start grid: humans in the middle with the AI lined up either side of them
 export function gridOrder(race, rng = Math.random) {
@@ -314,7 +316,7 @@ export function stepRacer(race, r, dt, inp, predict = false) {
   r.st += dt;
   r.grabCd = Math.max(0, r.grabCd - dt); r.tackleCd = Math.max(0, r.tackleCd - dt);
   r.reach = Math.max(0, r.reach - dt); r.tackleT = Math.max(0, r.tackleT - dt);
-  r.slowT = Math.max(0, r.slowT - dt); r.immune = Math.max(0, r.immune - dt); r.cleanT = Math.max(0, r.cleanT - dt);
+  r.slowT = Math.max(0, r.slowT - dt); r.immune = Math.max(0, r.immune - dt); r.cleanT = Math.max(0, r.cleanT - dt); r.jumpCd = Math.max(0, (r.jumpCd || 0) - dt); r.rjT = Math.max(0, (r.rjT || 0) - dt);
   if (r.charges < ROLL_CHARGES) { r.chargeT += dt; if (r.chargeT >= ROLL_RECHARGE) { r.charges++; r.chargeT = 0; } }
   r.sprinting = false;
   if (r.state === ST.IDLE) { r.y = height(r.x, r.z); r.gy = r.y; r.vx = r.vy = r.vz = 0; return; }
@@ -350,7 +352,6 @@ export function stepRacer(race, r, dt, inp, predict = false) {
       else r.meter = Math.max(0, r.meter - 0.35 * dt);
       if (steer && sp > 8) r.meter += Math.abs(steer) * (sp - 8) * 0.035 * dt; // yanking the wheel at speed
       if (inp.b) r.meter = Math.max(0, r.meter - 1.0 * dt);
-      r.jumpCd = Math.max(0, (r.jumpCd || 0) - dt);
       if (r.spaceBuf > 0 && r.airT < 0.15 && r.jumpCd <= 0) {
         r.spaceBuf = 0;
         const dz = c.z - r.z, nearCheese = c.released && c.heldBy == null && dz > 0.5 && dz < 5.5 && Math.abs(c.x - r.x) < 2.2 && aiMayGrab(race, r);
@@ -361,6 +362,10 @@ export function stepRacer(race, r, dt, inp, predict = false) {
           race.events.push({ e: 'dive', id: r.id });
         } else { // JUMP
           r.vy = Math.max(r.vy, (hx * r.vx + hz * r.vz)) + 4.6; r.grounded = false; r.jumped = true; r.airT = 0.01; // relative to the slope
+          r.jumpCd = 2.0;
+          // a crest within the next 0.25 s of travel? (ground falls away below the current slope line) => eligible for a boost
+          const la = 0.25, gx = r.x + r.vx * la, gz = r.z + r.vz * la;
+          r.crestJump = height(gx, gz) < height(r.x, r.z) + (hx * r.vx + hz * r.vz) * la - 0.12;
           race.events.push({ e: 'jump', id: r.id });
         }
       }
@@ -376,25 +381,26 @@ export function stepRacer(race, r, dt, inp, predict = false) {
       ax -= K_DRAG * 0.5 * sp * r.vx; az -= K_DRAG * 0.5 * sp * r.vz;
       break;
     case ST.TUMBLE: {
-      // rolling keeps (or gains) momentum: full gravity along the slope, little friction
-      slope(1.0);
-      if (r.grounded) fric(0.6);
-      ax -= K_DRAG * 0.42 * sp * r.vx; az -= K_DRAG * 0.42 * sp * r.vz;
+            // rolling keeps its momentum but is no faster than running (so it isn't an exploit)
+      slope(0.8);
+      if (r.grounded) fric(1.2);
+      ax -= K_DRAG * 0.75 * sp * r.vx; az -= K_DRAG * 0.75 * sp * r.vz;
       ax += steer * (r.grounded ? 4 : 7); // lean / air-steer
       if (inp.f && !r.grounded) az += 2;
       r.spin += r.spinRate * dt; r.spinRate = r.spinRate * (1 - 0.6 * dt) + (r.grounded ? sp * 0.3 * dt : 0);
       r.roll += r.rollRate * dt; r.rollRate *= (1 - 1.2 * dt);
       const flat = Math.abs(hz) < 0.15;
       if (r.spaceBuf > 0 && r.st > 0.25) {
-        if (sp >= 5 && r.charges > 0 && r.airT < 0.3) { // ROLL-JUMP: launch toward the cheese
+        if (sp >= 5 && r.charges > 0 && r.airT < 0.3 && (r.rjT || 0) <= 0) { // ROLL-JUMP: launch toward the cheese
           r.spaceBuf = 0; r.charges--; r.chargeT = 0; r.rollJumps++;
           const tx = c.heldBy == null ? clamp((c.x - r.x) * 0.25, -3, 3) : 0;
-          r.vy = Math.max(r.vy, (hx * r.vx + hz * r.vz)) + 7; r.vz += 4; r.vx += tx + steer * 2;
+          r.vy = Math.max(r.vy, (hx * r.vx + hz * r.vz)) + 7; r.vz += 2.5; r.vx += tx + steer * 2; r.rjT = 0.8;
+          { const sp2 = Math.hypot(r.vx, r.vz), cap = Math.max(sp, 14); if (sp2 > cap) { r.vx *= cap / sp2; r.vz *= cap / sp2; } } // never faster than a sprint
           r.grounded = false; r.airT = 0.01;
           race.events.push({ e: 'rjump', id: r.id });
-        } else if (sp < 5) { r.spaceBuf = 0; r.state = ST.GETUP; r.st = 0; r.dur = 0.35; } // get up early
+        } else if (sp < 5) { r.spaceBuf = 0; r.state = ST.GETUP; r.st = 0; r.dur = 0.6; } // get up early
       }
-      if ((sp < 3 && r.st > 0.7) || (flat && sp < 6 && r.st > 2.5) || r.st > 9) { r.state = ST.GETUP; r.st = 0; r.dur = 0.45; }
+      if ((sp < 3 && r.st > 0.7) || (flat && sp < 6 && r.st > 2.5) || r.st > 9) { r.state = ST.GETUP; r.st = 0; r.dur = 0.6; }
       break;
     }
     case ST.GETUP:
@@ -427,7 +433,7 @@ export function stepRacer(race, r, dt, inp, predict = false) {
       if (r.state === ST.RUN) {
         if (r.jumped) {
           // a well-timed jump lands clean with a little boost; a bad one sends you rolling
-          if (impact < 7.5) { r.cleanT = 0.5; r.jumpCd = 1.2; race.events.push({ e: 'clean', id: r.id }); }
+          if (impact < 5.5) { if (r.crestJump) r.cleanT = 0.5; race.events.push({ e: 'clean', id: r.id, boost: !!r.crestJump }); }
           else if (!predict) startTumble(race, r, 'jump', true);
           r.jumped = false;
         } else if (!predict && (impact > 9 || r.airT > 0.8)) startTumble(race, r, 'landing');
@@ -463,7 +469,7 @@ export function stepRacer(race, r, dt, inp, predict = false) {
           if (d < bd && Math.abs(o.y - r.y) < 1.5) { bd = d; best = o; }
         }
         if (best) {
-          r.tackleCd = 2.5; r.vx *= 0.8; r.vz *= 0.8;
+          r.tackleCd = 5; r.vx *= 0.8; r.vz *= 0.8;
           best.slowT = 1.0;
           const trip = best.immune <= 0;
           race.events.push({ e: 'grab', id: r.id, target: best.id, trip });
@@ -482,10 +488,10 @@ export function aiInput(race, r) {
   let lead = null;
   for (const o of race.racers) if (!o.ai && (!lead || o.z > lead.z)) lead = o;
   a.rubber = 1; a.pull = 0;
-  if (lead && race.phase === 'race') {
+  // symmetric and weak, so skill still decides it: no help while tumbling, near the cheese, or late in the race
+  if (lead && race.phase === 'race' && r.state !== ST.TUMBLE && Math.hypot(c.x - r.x, c.z - r.z) > 30 && r.z < 300) {
     const gap = r.z - lead.z;
-    a.pull = clamp((a.pref - gap) * 0.6, gap > 22 ? -12 : -7, 9);
-    if (gap > a.pref + 4) a.rubber = 0.7; else if (gap < -3) a.rubber = 1.35;
+    a.pull = clamp((a.pref - gap) * 0.3, -3, 3);
   }
   const canGrab = race.raceT > AI_GRAB_DELAY;
   const aheadCheese = c.released && c.heldBy == null && c.z > r.z - 2;
@@ -513,8 +519,8 @@ export function aiInput(race, r) {
   }
   if (r.meter > a.caution + 0.1) a.fwdHold = 0; else if (r.meter < a.caution - 0.15) a.fwdHold = 1;
   inp.f = a.fwdHold; inp.b = r.meter > a.caution + 0.3 ? 1 : 0;
-  if (a.sprintHold) { if (r.stamina < 0.05 || r.meter > a.caution * 0.6) a.sprintHold = 0; }
-  else if (r.stamina > 0.95 && r.meter < 0.1 && q() < a.sprinty * 0.015 * a.rubber) a.sprintHold = 1;
+  if (a.sprintHold) { if (r.stamina < 0.05 || r.meter > Math.max(0.5, a.caution * 0.8)) a.sprintHold = 0; }
+  else { const far = c.released && c.heldBy == null && c.z - r.z > 10; if (r.stamina > (far ? 0.8 : 0.95) && r.meter < (far ? 0.25 : 0.1) && q() < a.sprinty * (far ? 0.03 : 0.015)) a.sprintHold = 1; } // chase harder when the cheese is getting away
   inp.s = a.sprintHold;
   if ((r.state === ST.RUN || r.state === ST.DIVE) && canGrab) {
     const d = cheeseDist(race, r);
@@ -527,7 +533,8 @@ export function aiInput(race, r) {
   if (r.state === ST.RUN && r.tackleCd <= 0 && race.raceT > 3) {
     for (const o of race.racers) {
       if (o === r || o.state === ST.TUMBLE) continue;
-      if (Math.hypot(o.x - r.x, o.z - r.z) < 1.7 && cheeseDist(race, r) > 3.5 && q() < a.aggro * 0.01) { inp.g++; break; }
+      // only grab a rival who is AHEAD of us, when the cheese is in play nearby (no random trips mid-hill)
+      if (o.z > r.z && Math.hypot(o.x - r.x, o.z - r.z) < 1.7 && Math.hypot(c.x - o.x, c.z - o.z) < 20 && cheeseDist(race, r) > 3.5 && q() < a.aggro * 0.002) { inp.g++; break; }
     }
   }
   return inp;
@@ -545,7 +552,7 @@ function substep(race, dt, inputs) {
   const c = race.cheese;
   if (race.phase === 'countdown') {
     race.cd -= dt;
-    if (race.cd <= 1.5 && !c.released) { releaseCheese(race, c); race.events.push({ e: 'release' }); }
+    if (race.cd <= 2.0 && !c.released) { releaseCheese(race, c); race.events.push({ e: 'release' }); }
     if (race.cd <= 0) {
       race.phase = 'race'; race.raceT = 0;
       for (const r of race.racers) { r.state = ST.RUN; r.st = 0; }
@@ -616,12 +623,23 @@ function finishRace(race, r, how) {
   race.events.push({ e: 'win', id: r.id, how });
 }
 
-export function rankings(race) {
-  return [...race.racers].sort((a, b) => {
-    if (race.result) { if (a.id === race.result.id) return -1; if (b.id === race.result.id) return 1; }
-    return b.z - a.z;
+// ONE ranking used everywhere (HUD, results, points, server): winner, then finishers in finish order,
+// then furthest down the hill; exact ties broken by id so the order is always total and stable.
+export function rankRacers(racers, result) {
+  const wid = result ? result.id : null;
+  return [...racers].sort((a, b) => {
+    if (wid != null) { if (a.id === wid) return -1; if (b.id === wid) return 1; }
+    const fa = a.finished ? 1 : 0, fb = b.finished ? 1 : 0;
+    if (fa !== fb) return fb - fa;
+    if (fa && fb && a.finishTime && b.finishTime && a.finishTime !== b.finishTime) return a.finishTime - b.finishTime;
+    const dz = Math.round(b.z * 100) - Math.round(a.z * 100);
+    if (dz) return dz;
+    return String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0;
   });
 }
+export function rankings(race) { return rankRacers(race.racers, race.result); }
+// heat points by placing (points only decide the best-of-3 match)
+export const HEAT_POINTS = [10, 7, 5, 3, 2, 1];
 
 // ---------- compact network snapshot ----------
 const r3 = v => Math.round(v * 1000) / 1000;

@@ -141,6 +141,7 @@ const BONES = [ // group, parent group key, from joint, to joint, rest direction
   ['shL', 'body', J.SHL, J.ELL, DOWN], ['elL', 'shL', J.ELL, J.HDL, DOWN], ['shR', 'body', J.SHR, J.ELR, DOWN], ['elR', 'shR', J.ELR, J.HDR, DOWN],
   ['hipL', 'body', J.HIPL, J.KNL, DOWN], ['knL', 'hipL', J.KNL, J.FTL, DOWN], ['hipR', 'body', J.HIPR, J.KNR, DOWN], ['knR', 'hipR', J.KNR, J.FTR, DOWN],
 ];
+const _lv = new THREE.Vector3(), _lv2 = new THREE.Vector3();
 export class RacerView {
   constructor(scene, info, label, labelColor) {
     this.rd = new Ragdoll(); this.blend = null;
@@ -180,7 +181,9 @@ export class RacerView {
     m.body.position.set(0, 0.95, 0);
     _y.copy(P(J.CHEST)).sub(pel).normalize();
     _x.copy(P(J.SHL)).sub(_v2.copy(P(J.SHR))).add(_v2.copy(P(J.HIPL)).sub(P(J.HIPR)));
-    _x.addScaledVector(_y, -_x.dot(_y)).normalize();
+    _x.addScaledVector(_y, -_x.dot(_y));
+    if (!(_x.lengthSq() > 1e-6) || !Number.isFinite(_y.x)) return; // degenerate frame: keep the last pose
+    _x.normalize();
     _z.crossVectors(_x, _y);
     _m.makeBasis(_x, _y, _z);
     m.body.quaternion.setFromRotationMatrix(_m);
@@ -203,6 +206,46 @@ export class RacerView {
   }
   // s: {x,y,z, yaw,pitch,roll, state, flags, vx,vz, st}
   apply(s, dt, particles) {
+    this._apply(s, dt, particles);
+    // pin the name label just above the HEAD (ragdoll or not), so it never floats off a tumbling body
+    if (this.label) {
+      this.root.updateMatrixWorld(true);
+      this.m.head.getWorldPosition(_lv); this.m.body.getWorldPosition(_lv2);
+      _lv.y = Math.max(_lv.y, _lv2.y + 0.25 * this.m.H); // upside down: stay above the body, not inside it
+      this.root.worldToLocal(_lv);
+      this.label.position.set(_lv.x, _lv.y + 0.32 + 0.18 * this.m.H, _lv.z);
+    }
+    if (this.tag && this.tag.visible) {
+      this.root.updateMatrixWorld(true);
+      this.m.head.getWorldPosition(_lv); this.m.body.getWorldPosition(_lv2);
+      _lv.y = Math.max(_lv.y, _lv2.y + 0.25 * this.m.H); this.root.worldToLocal(_lv);
+      this.tag.position.set(_lv.x, _lv.y + 0.3 + 0.18 * this.m.H, _lv.z);
+    }
+  }
+  // small coloured place tag (gold/silver/bronze dot + name) shown over the top 3; rank 0 = hide
+  setTag(rank, name) {
+    if (!rank) { if (this.tag) this.tag.visible = false; return; }
+    if (!this.tag) {
+      this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ depthTest: false, transparent: true, fog: false, sizeAttenuation: false, toneMapped: false }));
+      this.tag.center.set(0.5, 0); this.tag.renderOrder = 10; this.tag.scale.set(0.22, 0.055, 1); this.root.add(this.tag); this.tagTex = {};
+    }
+    if (this.tagRank !== rank) {
+      this.tagRank = rank;
+      if (!this.tagTex[rank]) {
+        const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d');
+        const col = ['#ffd34d', '#dfe6ee', '#e0975a'][rank - 1];
+        g.font = 'bold 30px sans-serif'; const w = Math.min(250, g.measureText(name).width + 62);
+        g.fillStyle = 'rgba(20,14,6,0.55)'; g.beginPath(); g.roundRect((256 - w) / 2, 10, w, 44, 22); g.fill();
+        g.fillStyle = col; g.beginPath(); g.arc((256 - w) / 2 + 24, 32, 13, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#1b1408'; g.font = 'bold 18px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(rank), (256 - w) / 2 + 24, 33);
+        g.fillStyle = col; g.font = 'bold 30px sans-serif'; g.textAlign = 'left'; g.fillText(name, (256 - w) / 2 + 44, 33);
+        const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; this.tagTex[rank] = t;
+      }
+      this.tag.material.map = this.tagTex[rank]; this.tag.material.needsUpdate = true;
+    }
+    this.tag.visible = true;
+  }
+  _apply(s, dt, particles) {
     const m = this.m, L = m.limbs, b = m.body;
     this.t += dt;
     // --- physics ragdoll while diving / tumbling ---
@@ -317,7 +360,7 @@ export class RacerView {
   kick(vx, vy, vz) {
     if (!this.rd.active) return;
     const sp = Math.hypot(vx, vz) || 1;
-    this.rd.addVelocity([vx, vy, vz], [vz / sp * 7, 0, -vx / sp * 7]);
+    this.rd.addVelocity([vx, vy, vz], [vz / sp * 3.2, 0, -vx / sp * 3.2]); // gentle flip (a hard spin tore the rig apart)
   }
   dispose(scene) { scene.remove(this.root); }
 }
@@ -349,6 +392,15 @@ export class CheeseView {
     const mesh = new THREE.Mesh(geo, mats); mesh.rotation.z = Math.PI / 2; mesh.castShadow = true; mesh.receiveShadow = true;
     this.group = new THREE.Group();
     this.group.add(mesh);
+    // bright outline (inverted hull) so the wheel pops against grass and mud
+    const hull = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.34, 14, 1), new THREE.MeshBasicMaterial({ color: 0xfff1a0, side: THREE.BackSide, fog: false, toneMapped: false }));
+    hull.rotation.z = Math.PI / 2; hull.scale.set(1.16, 1.3, 1.16); this.group.add(hull); this.hull = hull;
+    // tall soft beam of light above it (visible from anywhere on the hill)
+    const bc = document.createElement('canvas'); bc.width = 4; bc.height = 128;
+    { const g = bc.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 128); gr.addColorStop(0, 'rgba(255,190,40,0)'); gr.addColorStop(0.55, 'rgba(255,185,40,0.4)'); gr.addColorStop(1, 'rgba(255,205,70,0.85)'); g.fillStyle = gr; g.fillRect(0, 0, 4, 128); }
+    const bt = new THREE.CanvasTexture(bc); bt.colorSpace = THREE.SRGBColorSpace;
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 14, 10, 1, true), new THREE.MeshBasicMaterial({ map: bt, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false, toneMapped: false }));
+    beam.renderOrder = 9; this.beam = beam; scene.add(beam);
     // soft glow marker so it is easy to spot from afar
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.95, 32), new THREE.MeshBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.35, depthWrite: false }));
     ring.rotation.x = -Math.PI / 2; this.ring = ring; scene.add(ring);
@@ -358,6 +410,7 @@ export class CheeseView {
     this.group.position.set(x, y, z);
     this.group.quaternion.set(q[0], q[1], q[2], q[3]);
     this.ring.position.set(x, groundY + 0.06, z);
+    this.beam.position.set(x, y + 7.4, z);
     this.ring.visible = y - groundY < 1.4;
   }
 }
