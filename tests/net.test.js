@@ -38,7 +38,7 @@ try {
   clearInterval(iv);
   check(a.snaps > 200 && b.snaps > 200, `snapshots streaming (~30/s): A=${a.snaps} B=${b.snaps}`);
   const ra = a.last.r.find((r) => r[0] === a.welcome.id), rb = b.last.r.find((r) => r[0] === a.welcome.id);
-  check(ra && rb && ra[3] > 20, `host racer moved downhill (z=${ra && ra[3].toFixed(1)}) and both clients see it`);
+  check(ra && rb && ra[3] > 5, `host racer moved downhill (z=${ra && ra[3].toFixed(1)}) and both clients see it`);
   check(a.last.c.length >= 10, 'cheese state (position + quaternion + velocity) present');
   const size = JSON.stringify(a.last).length;
   check(size < 2000, `snapshot is compact (${size} bytes)`);

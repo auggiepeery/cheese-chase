@@ -63,6 +63,8 @@
   .speed { font-size: 16px; } .speed b { font-size: 34px; font-variant-numeric: tabular-nums; }
   .meter { position: relative; width: 190px; height: 14px; background: rgba(0,0,0,0.35); border-radius: 8px; overflow: hidden; margin: 6px 0; border: 2px solid rgba(255,255,255,0.6); }
   .meter-fill { height:100%; width:0; background:#7dff8a; transition: width .1s; }
+  .meter.stam { height: 10px; } .stam-fill { background: #6ec8ff !important; width: 100%; }
+  .meter.stam span { line-height: 6px; font-size: 7px; }
   .meter span { position:absolute; inset:0; font-size: 9px; font-weight: 900; letter-spacing: 2px; text-align:center; line-height: 10px; color: rgba(255,255,255,0.9); }
   .cheese-dist { font-weight: 800; font-size: 16px; }
   .hud-msg { position:absolute; top: 28%; left:0; right:0; text-align:center; font-size: 46px; font-weight: 900; opacity:0; transform: scale(.7); transition: opacity .15s, transform .15s; }
@@ -100,7 +102,7 @@
 <div id="touch">
   <button id="t-left" style="left:20px;bottom:110px">◀</button><button id="t-right" style="left:100px;bottom:110px">▶</button>
   <button id="t-run" style="left:60px;bottom:190px">RUN</button><button id="t-brake" style="left:60px;bottom:30px">BRAKE</button>
-  <button id="t-dive" style="right:20px;bottom:30px">DIVE</button><button id="t-grab" style="right:100px;bottom:80px">GRAB🧀</button><button id="t-tackle" style="right:20px;bottom:120px">GRAB👤</button>
+  <button id="t-dive" style="right:20px;bottom:30px">DIVE</button><button id="t-grab" style="right:100px;bottom:80px">GRAB🧀</button><button id="t-tackle" style="right:20px;bottom:120px">GRAB👤</button><button id="t-jump" style="right:100px;bottom:170px">JUMP</button><button id="t-sprint" style="left:140px;bottom:190px">SPRINT</button>
 </div>
 
 <div id="screen-menu" class="screen">
@@ -114,11 +116,12 @@
     </div>
     <div class="controls">
       <span><b>Run / steer</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows</span><span><b>Brake / steady</b> <kbd>S</kbd> / <kbd>↓</kbd></span>
+      <span><b>Sprint</b> hold <kbd>Shift</kbd> (risky!)</span><span><b>Jump</b> <kbd>Q</kbd></span>
       <span><b>Dive</b> <kbd>Space</kbd></span><span><b>Grab the cheese</b> <kbd>E</kbd></span>
       <span><b>Grab a racer</b> <kbd>F</kbd> (slows / trips them)</span><span><b>Quit</b> <kbd>Esc</kbd> · <b>Rematch</b> <kbd>R</kbd></span>
     </div>
-    <p class="fine">Catch the cheese (get close and press <kbd>E</kbd>) or be first over the finish line to win. Go too fast, or land hard off a bump, and you'll tumble head over heels — keep an eye on your BALANCE bar.<br>
-    2-player: P1 = WASD, Space dive, E grab cheese, F grab racer · P2 = Arrows, Enter dive, <kbd>.</kbd> grab cheese, <kbd>/</kbd> grab racer.<br>
+    <p class="fine">Catch the cheese (get close and press <kbd>E</kbd>) or be first over the finish line to win. The hill speeds you up on its own; sprinting builds speed fast but makes you far likelier to trip. Nobody lands a jump or dive on their feet here: you ragdoll and roll, then get up (press <kbd>Space</kbd> once you've slowed).<br>
+    2-player: P1 = WASD, Left Shift sprint, Q jump, Space dive, E grab cheese, F grab racer · P2 = Arrows, Right Shift / Num0 sprint, <kbd>'</kbd> / Num3 jump, Enter dive, <kbd>.</kbd> / Num1 grab cheese, <kbd>/</kbd> / Num2 grab racer.<br>
     An original game inspired by the traditional cheese-rolling races of Gloucestershire.</p>
   </div>
 </div>

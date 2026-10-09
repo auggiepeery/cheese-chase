@@ -22,7 +22,7 @@ await page.screenshot({ path: `shots/${tag}-2-select.png` });
 await page.keyboard.press('KeyD'); await sleep(300);
 await page.click('#select-go'); await sleep(2000);
 await page.screenshot({ path: `shots/${tag}-3-countdown.png` });
-await page.evaluate(() => window.__cc.advance(4.2));
+await page.evaluate(() => window.__cc.advance(4.7));
 await page.keyboard.down('KeyW');
 for (let i = 0; i < (process.env.QUICK ? 3 : 6); i++) {
   await page.evaluate(() => window.__cc.advance(1.5));

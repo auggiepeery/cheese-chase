@@ -119,7 +119,7 @@ wss.on('connection', (ws) => {
       case 'in': {
         const a = Array.isArray(m.i) ? m.i : [];
         const n = (v) => (Number.isFinite(+v) ? +v : 0);
-        me.input = { ax: Math.max(-1, Math.min(1, n(a[0]))), f: a[1] ? 1 : 0, b: a[2] ? 1 : 0, d: n(a[3]) | 0, g: n(a[4]) | 0, k: n(a[5]) | 0 };
+        me.input = { ax: Math.max(-1, Math.min(1, n(a[0]))), f: a[1] ? 1 : 0, b: a[2] ? 1 : 0, d: n(a[3]) | 0, g: n(a[4]) | 0, k: n(a[5]) | 0, j: n(a[6]) | 0, s: a[7] ? 1 : 0 };
         break;
       }
       case 'start':

@@ -15,7 +15,7 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.95;
+renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
@@ -28,9 +28,9 @@ const menuCam = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 3
 // input
 // ---------------------------------------------------------------------------
 const KEYMAPS = {
-  solo: { up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], dive: ['Space'], grab: ['KeyE'], tackle: ['KeyF'] },
-  p1: { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], dive: ['Space'], grab: ['KeyE'], tackle: ['KeyF'] },
-  p2: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], dive: ['Enter', 'NumpadEnter', 'Numpad0'], grab: ['Period', 'ShiftRight', 'Numpad1'], tackle: ['Slash', 'ControlRight', 'Numpad2'] },
+  solo: { up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], sprint: ['ShiftLeft', 'ShiftRight'], dive: ['Space'], jump: ['KeyQ'], grab: ['KeyE'], tackle: ['KeyF'] },
+  p1: { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], sprint: ['ShiftLeft'], dive: ['Space'], jump: ['KeyQ'], grab: ['KeyE'], tackle: ['KeyF'] },
+  p2: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], sprint: ['ShiftRight', 'Numpad0'], dive: ['Enter', 'NumpadEnter'], jump: ['Quote', 'Numpad3'], grab: ['Period', 'Numpad1'], tackle: ['Slash', 'Numpad2'] },
 };
 const keys = new Set();
 const pressHandlers = [];
@@ -50,11 +50,12 @@ class LocalController {
     if (this.map.dive.includes(code)) this.inp.d++;
     if (this.map.grab.includes(code)) this.inp.g++;
     if (this.map.tackle.includes(code)) this.inp.k++;
+    if (this.map.jump.includes(code)) this.inp.j++;
   }
   read() {
     const any = (a) => a.some((k) => keys.has(k));
     const m = this.map;
-    this.inp.f = any(m.up) ? 1 : 0; this.inp.b = any(m.down) ? 1 : 0;
+    this.inp.f = any(m.up) ? 1 : 0; this.inp.b = any(m.down) ? 1 : 0; this.inp.s = any(m.sprint) ? 1 : 0;
     this.inp.ax = (any(m.left) ? 1 : 0) - (any(m.right) ? 1 : 0); // camera looks down +z, so screen-left is +x
     return this.inp;
   }
@@ -72,6 +73,8 @@ function setupTouch(ctrl) {
   bind('#t-dive', () => ctrl.press('Space'));
   bind('#t-grab', () => ctrl.press('KeyE'));
   bind('#t-tackle', () => ctrl.press('KeyF'));
+  bind('#t-jump', () => ctrl.press('KeyQ'));
+  bind('#t-sprint', () => { keys.add('ShiftLeft'); keys.add('KeyW'); }, () => { keys.delete('ShiftLeft'); keys.delete('KeyW'); });
 }
 
 // ---------------------------------------------------------------------------
@@ -105,9 +108,10 @@ function makeHud(label, splitIdx, splitCount) {
     <div class="hud-hint"></div>
     <div class="hud-bl"><div class="speed"><b>0</b> km/h</div>
       <div class="meter"><div class="meter-fill"></div><span>BALANCE</span></div>
+      <div class="meter stam"><div class="meter-fill stam-fill"></div><span>SPRINT</span></div>
       <div class="cheese-dist"></div></div>`;
   $('#huds').appendChild(el);
-  return { el, timer: el.querySelector('.timer'), pos: el.querySelector('.pos'), of: el.querySelector('.of'), msg: el.querySelector('.hud-msg'), hint: el.querySelector('.hud-hint'), speed: el.querySelector('.speed b'), meter: el.querySelector('.meter-fill'), cdist: el.querySelector('.cheese-dist'), msgT: 0 };
+  return { el, timer: el.querySelector('.timer'), pos: el.querySelector('.pos'), of: el.querySelector('.of'), msg: el.querySelector('.hud-msg'), hint: el.querySelector('.hud-hint'), speed: el.querySelector('.speed b'), meter: el.querySelector('.meter-fill'), stam: el.querySelector('.stam-fill'), cdist: el.querySelector('.cheese-dist'), msgT: 0 };
 }
 function hudMessage(view, text, cls = '', dur = 1.6) {
   if (!view) return;
@@ -192,10 +196,10 @@ function updateOffline(dt) {
   if (race.phase === 'over') maybeShowResults(race.result, race.racers.map(racerSummary), dt);
 }
 function stateFromRacer(r) {
-  return { x: r.x, y: r.y, z: r.z, yaw: r.heading, pitch: r.spin, roll: r.roll, state: r.state, st: r.st, vx: r.vx, vz: r.vz, meter: r.meter, grounded: r.grounded,
-    flags: (r.reach > 0 ? 1 : 0) | (r.tackleT > 0 ? 2 : 0) | (r.slowT > 0 ? 4 : 0) | (r.finished ? 8 : 0) };
+  return { x: r.x, y: r.y, z: r.z, vy: r.vy, stamina: r.stamina, yaw: r.heading, pitch: r.spin, roll: r.roll, state: r.state, st: r.st, vx: r.vx, vz: r.vz, meter: r.meter, grounded: r.grounded,
+    flags: Core.racerFlags(r) };
 }
-const racerSummary = (r) => ({ id: r.id, name: r.name, char: r.char, x: r.x, y: r.y, z: r.z, vx: r.vx, vz: r.vz, state: r.state, meter: r.meter, ai: !!r.ai, finished: r.finished });
+const racerSummary = (r) => ({ id: r.id, name: r.name, char: r.char, x: r.x, y: r.y, z: r.z, vx: r.vx, vz: r.vz, state: r.state, meter: r.meter, stamina: r.stamina, st: r.st, ai: !!r.ai, finished: r.finished });
 
 // ---------------------------------------------------------------------------
 // events -> effects/messages (shared by offline and online)
@@ -212,13 +216,15 @@ function handleEvents(events) {
       case 'tumble': {
         const p = racerPos(ev.id);
         if (p) particles.kick(p.x, p.y, p.z, 0, 4, 30);
-        if (v) { hudMessage(v, ev.why === 'grabbed' ? 'TRIPPED!' : ev.why === 'landing' ? 'HARD LANDING!' : 'WIPEOUT!', 'red', 1.4); v.shake = 0.6; }
-        if (ev.why === 'speed' || ev.why === 'landing') feed(`💫 ${nameOf(ev.id)} is tumbling!`);
+        const TXT = { grabbed: 'TRIPPED!', landing: 'HARD LANDING!', jump: 'NO STICKING THAT!', dive: 'HEAD OVER HEELS!', air: 'AIRBORNE!', trip: 'STUMBLE!', collision: 'SKITTLED!', hay: 'INTO THE HAY!' };
+        if (v) { hudMessage(v, TXT[ev.why] || 'WIPEOUT!', 'red', 1.4); v.shake = 0.6; }
+        if (ev.why === 'speed' || ev.why === 'landing' || ev.why === 'trip' || ev.why === 'air') feed(`💫 ${nameOf(ev.id)} is cartwheeling down the hill!`);
         break;
       }
       case 'bounce': particles.kick(ev.x, ev.y, ev.z, 0, 3, Math.min(18, ev.s * 2)); break;
       case 'land': { const p = racerPos(ev.id); if (p) particles.kick(p.x, p.y, p.z, 0, 2, ev.s); if (v) v.shake = Math.max(v.shake, Math.min(0.35, ev.s * 0.03)); break; }
       case 'dive': { const p = racerPos(ev.id); if (p) particles.kick(p.x, p.y, p.z, 0, 4, 8); if (v) hudMessage(v, 'DIVE!', '', 0.6); break; }
+      case 'jump': { const p = racerPos(ev.id); if (p) particles.kick(p.x, p.y, p.z, 0, 3, 6); if (v) hudMessage(v, 'JUMP!', '', 0.6); break; }
       case 'grab': {
         feed(`✋ ${nameOf(ev.id)} grabbed ${nameOf(ev.target)}${ev.trip ? ' — down they go!' : '!'}`);
         if (v) hudMessage(v, ev.trip ? 'TRIPPED THEM!' : 'GRABBED!', 'gold', 1);
@@ -255,21 +261,23 @@ function updateHUDs(phase, cd, raceT, racers, cheese) {
     const m = Math.min(1, me.meter || 0);
     h.meter.style.width = (m * 100) + '%';
     h.meter.style.background = m > 0.7 ? '#ff4d4d' : m > 0.4 ? '#ffb84d' : '#7dff8a';
+    h.stam.style.width = (Math.max(0, Math.min(1, me.stamina ?? 1)) * 100) + '%';
     const dz = cheese.z - me.z, d = Math.hypot(cheese.x - me.x, cheese.z - me.z);
     h.cdist.textContent = cheese.heldBy != null ? '🧀 caught!' : (dz >= 0 ? `🧀 ${d.toFixed(0)} m ahead` : `🧀 ${d.toFixed(0)} m behind`);
     let hint = '';
     if (phase === 'race') {
       if (cheese.heldBy == null && d < 3.2 && Math.abs(cheese.y - me.y - 0.5) < 2.5 && (me.state === ST.RUN || me.state === ST.DIVE)) hint = d < 2.2 ? 'GRAB IT! [E]' : 'CLOSE! DIVE [SPACE] + GRAB [E]';
       else if (me.state === ST.RUN && m > 0.6) hint = 'TOO FAST! Ease off / brake';
+      else if (me.state === ST.TUMBLE && sp < 6.5 && (me.st || 0) > 0.6) hint = 'GET UP! [SPACE]';
       else if (me.state === ST.RUN && sorted.some((o) => o.id !== me.id && o.state !== ST.TUMBLE && Math.hypot(o.x - me.x, o.z - me.z) < 1.9)) hint = 'GRAB RACER [F]';
-      if (v.n === 2) hint = hint.replace('[E]', v.idx ? '[ . ]' : '[E]').replace('[SPACE]', v.idx ? '[ENTER]' : '[SPACE]').replace('[F]', v.idx ? '[ / ]' : '[F]');
+      if (v.n === 2) hint = hint.replace('[E]', v.idx ? '[ . ]' : '[E]').replace(/\[SPACE\]/g, v.idx ? '[ENTER]' : '[SPACE]').replace('[F]', v.idx ? '[ / ]' : '[F]');
     }
     h.hint.textContent = hint; h.hint.className = 'hud-hint' + (hint ? ' show' : '') + (hint.startsWith('GRAB IT') ? ' hot' : '');
   }
   // countdown
   const cdEl = $('#countdown');
   if (phase === 'countdown') {
-    const n = Math.ceil(cd - 1);
+    const n = Math.ceil(cd - 1.5);
     cdEl.textContent = n > 0 ? n : '🧀';
     cdEl.className = 'show';
   } else cdEl.className = '';
@@ -295,13 +303,15 @@ function updateCamera(v, dt, phase) {
   }
   const over = phase === 'over';
   const t = performance.now() / 1000;
-  const behind = phase === 'countdown' ? 6.5 : 7.4;
+  // camera boom shortens on the steep face so the runner stays big on screen
+  const slope = Math.max(0, (height(p.x, p.z - 3) - height(p.x, p.z + 3)) / 6);
+  const behind = (phase === 'countdown' ? 6.5 : 7.2) / (1 + slope * 0.9);
   const desired = over
     ? _tmpV.set(p.x + Math.sin(t * 0.4) * 7, p.y + 3, p.z + Math.cos(t * 0.4) * 7)
-    : _tmpV.set(p.x * 0.85, p.y + 4.4, p.z - behind);
-  desired.y = Math.max(desired.y, height(desired.x, desired.z) + 2.2);
+    : _tmpV.set(p.x * 0.85, p.y + 3.4, p.z - behind);
+  desired.y = Math.max(desired.y, height(desired.x, desired.z) + 2.0);
   if (!v.camPos) v.camPos = desired.clone();
-  const k = 1 - Math.exp(-(over ? 2 : 6) * dt);
+  const k = 1 - Math.exp(-(over ? 2 : 9) * dt);
   v.camPos.lerp(desired, k);
   v.camPos.y = Math.max(v.camPos.y, height(v.camPos.x, v.camPos.z) + 1.0);
   const lz = over ? p.z : p.z + 9;
@@ -312,7 +322,7 @@ function updateCamera(v, dt, phase) {
   v.cam.lookAt(v.look);
   // speed FOV kick
   const sp = rv && rv.lastSp || 0;
-  v.cam.fov += ((62 + Math.min(14, sp * 0.7)) - v.cam.fov) * (1 - Math.exp(-3 * dt));
+  v.cam.fov += ((62 + Math.min(10, sp * 0.55)) - v.cam.fov) * (1 - Math.exp(-3 * dt));
   v.cam.updateProjectionMatrix();
   // hud message timers
   if (v.hud.msgT > 0) { v.hud.msgT -= dt; if (v.hud.msgT <= 0) v.hud.msg.className = 'hud-msg'; }
@@ -456,7 +466,7 @@ function startOnlineRace(m) {
   document.body.classList.add('racing');
 }
 function decodeRacer(a) {
-  return { id: a[0], x: a[1], y: a[2], z: a[3], q: [a[4], a[5], a[6], a[7]], vx: a[8], vy: a[9], vz: a[10], state: a[11], flags: a[12], meter: a[13], st: a[14] };
+  return { id: a[0], x: a[1], y: a[2], z: a[3], q: [a[4], a[5], a[6], a[7]], vx: a[8], vy: a[9], vz: a[10], state: a[11], flags: a[12], meter: a[13], st: a[14], stamina: a[15] };
 }
 function onSnapshot(m) {
   if (!online.inRace) return;
@@ -514,7 +524,7 @@ function sampleRemote(id, renderTime) {
 const _q = new THREE.Quaternion(), _e = new THREE.Euler();
 function netToViewState(s) {
   _q.set(s.q[0], s.q[1], s.q[2], s.q[3]); _e.setFromQuaternion(_q, 'YXZ');
-  return { x: s.x, y: s.y, z: s.z, yaw: _e.y, pitch: _e.x, roll: _e.z, state: s.state, st: s.st, vx: s.vx, vz: s.vz, meter: s.meter, flags: s.flags, grounded: !!(s.flags & 16) };
+  return { x: s.x, y: s.y, z: s.z, vy: s.vy, stamina: s.stamina, yaw: _e.y, pitch: _e.x, roll: _e.z, state: s.state, st: s.st, vx: s.vx, vz: s.vz, meter: s.meter, flags: s.flags, grounded: !!(s.flags & 16) };
 }
 function updateOnline(dt) {
   const now = performance.now() / 1000;
@@ -525,7 +535,7 @@ function updateOnline(dt) {
   const v = game.views[0];
   let inp = null;
   if (v && v.ctrl) inp = v.ctrl.read();
-  if (inp && now - online.lastSend > 1 / Core.C.TICK) { online.lastSend = now; online.send({ t: 'in', i: [inp.ax, inp.f, inp.b, inp.d, inp.g, inp.k] }); }
+  if (inp && now - online.lastSend > 1 / Core.C.TICK) { online.lastSend = now; online.send({ t: 'in', i: [inp.ax, inp.f, inp.b, inp.d, inp.g, inp.k, inp.j, inp.s] }); }
   // predict our own racer with the shared core
   const me = online.me;
   if (me && online.predicting && inp) {
@@ -545,7 +555,7 @@ function updateOnline(dt) {
       s = netToViewState(ns);
     }
     rv.apply(s, dt, particles); rv.lastSp = Math.hypot(s.vx, s.vz);
-    summaries.push({ id: r.id, name: r.name, char: r.char, ai: r.ai, x: s.x, y: s.y, z: s.z, vx: s.vx, vz: s.vz, state: s.state, meter: s.meter });
+    summaries.push({ id: r.id, name: r.name, char: r.char, ai: r.ai, x: s.x, y: s.y, z: s.z, vx: s.vx, vz: s.vz, state: s.state, meter: s.meter, stamina: s.stamina, st: s.st });
   }
   // cheese: extrapolate to "now" so what you see is what the server checks
   const c = online.cheese;
@@ -555,7 +565,7 @@ function updateOnline(dt) {
   const cd = online.cheeseDisp, k = 1 - Math.exp(-15 * dt);
   if (Math.hypot(tx - cd.x, tz - cd.z) > 5) { cd.x = tx; cd.y = ty; cd.z = tz; }
   cd.x += (tx - cd.x) * k; cd.y += (ty - cd.y) * k; cd.z += (tz - cd.z) * k;
-  cd.y = Math.max(cd.y, height(cd.x, cd.z) + Core.CHEESE_R * 0.9);
+  cd.y = Math.max(cd.y, height(cd.x, cd.z) + Core.CHEESE_HT * 0.8);
   if (c.heldBy != null) { const hv = game.racerViews.get(c.heldBy); if (hv) { cd.x = hv.root.position.x; cd.y = hv.root.position.y + 2.15; cd.z = hv.root.position.z; } }
   cheeseView.apply(cd.x, cd.y, cd.z, c.q, height(cd.x, cd.z));
   const cheeseInfo = { x: cd.x, y: cd.y, z: cd.z, heldBy: c.heldBy };
@@ -723,6 +733,7 @@ function setQuality(q) {
   quality = q;
   renderer.setPixelRatio(q >= 2 ? Math.min(devicePixelRatio, 2) : q === 1 ? Math.min(devicePixelRatio, 1) : 0.6);
   const ms = q >= 2 ? 2048 : 1024;
+  world.tufts.count = q >= 2 ? world.tuftsMax : q === 1 ? Math.floor(world.tuftsMax * 0.6) : Math.floor(world.tuftsMax * 0.3);
   if (world.sun.shadow.mapSize.x !== ms) { world.sun.shadow.mapSize.set(ms, ms); if (world.sun.shadow.map) { world.sun.shadow.map.dispose(); world.sun.shadow.map = null; } }
   renderer.setSize(innerWidth, innerHeight);
 }

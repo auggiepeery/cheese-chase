@@ -16,16 +16,34 @@ throws themselves down after it. Inspired by the traditional cheese-rolling race
 |---|---|---|---|
 | Run / steer | `W A S D` or arrows | `W A S D` | arrows |
 | Brake / steady yourself | `S` / `↓` | `S` | `↓` |
-| Dive (lunge forward) | `Space` | `Space` | `Enter` / `Numpad0` |
-| **Grab the cheese** (when close) | `E` | `E` | `.` / `Right Shift` / `Numpad1` |
-| **Grab a racer** (slows them, may trip them) | `F` | `F` | `/` / `Right Ctrl` / `Numpad2` |
+| **Sprint** (hold; drains the SPRINT bar, much likelier to trip) | `Shift` | `Left Shift` | `Right Shift` / `Numpad0` |
+| **Jump** | `Q` | `Q` | `'` / `Numpad3` |
+| Dive (lunge forward) | `Space` | `Space` | `Enter` |
+| Get up after a tumble (once you've slowed) | `Space` (or `Q` / `E`) | `Space` | `Enter` |
+| **Grab the cheese** (when close) | `E` | `E` | `.` / `Numpad1` |
+| **Grab a racer** (trips them into a tumble) | `F` | `F` | `/` / `Numpad2` |
 | Quit to menu / rematch | `Esc` / `R` on the results screen | | |
 
-**How to win:** get close to the cheese and press **E** (diving with Space gives you extra reach), or be first over the
-finish line. The hill is steep, so gravity keeps speeding you up. Above roughly 43 km/h your **BALANCE** bar fills,
-and hard landings off bumps add to it. When it's full you tumble head over heels, then get back up. Brake to recover.
-Phones get basic on-screen touch buttons.
+**How to win:** get close to the cheese and press **E** (diving gives extra reach), or be first over the finish line.
+The hill speeds you up on its own. Sprinting builds speed fast. Above about 45 km/h your **BALANCE** bar fills, and at
+very high speed you can simply stumble. Hard landings, big air off a lump, and *every* jump or dive end with you
+**ragdolling** down the slope with your momentum. Nobody lands on their feet. You get up automatically once you've
+slowed, or sooner with `Space`.
 
+### The hill
+The course is about 260 m of English hillside, modelled on the profile of a real cheese-rolling hill: a convex top,
+a near-1:1 face, a ledge, another steep drop, then the run-out into hay bales. It is lumpy and uneven, with tufty
+grass, worn mud tracks down the racing lines, post-and-rail fences, spectators (some with umbrellas) on the banks,
+hedges and woodland, patchwork fields in the valley, and overcast British daylight. All of it is procedural and original.
+
+### Physics
+* **Ragdolls:** each runner has a 15-particle Verlet ragdoll (pelvis, chest, head, shoulders, elbows, hands, hips,
+  knees, feet) with distance constraints, joint limits and terrain collision. It takes over the skeleton from the
+  current pose when a runner dives or tumbles (speed, stumble, hard or airborne landing, jump, grabbed, skittled by
+  another tumbler). It keeps the runner's momentum and spin, then blends back into the get-up animation.
+* **Cheese:** a real rigid-body cylinder (mass, inertia tensor, angular momentum, so gyroscopic effects work). 36 rim
+  contact points meet the height-field with restitution and friction impulses. It rolls, bounces off lumps, wobbles,
+  veers, and can tip over and slide.
 ## Files
 
 ```
@@ -34,7 +52,8 @@ cheese-chase.html   single-file build with everything inlined; works offline, ju
 js/game.js          bundled client (Three.js r170 + game code), built from src/
 src/core.js         shared simulation (terrain, physics, AI, race rules, snapshots), used by browser AND server
 src/world.js        scenery: terrain mesh, grass, trees, crowd, fences, sky, fog, particles
-src/models.js       low-poly runners (cosmetic variants, animation, ragdoll-ish tumbles) and the cheese wheel
+src/models.js       low-poly runners (cosmetic variants, animation, ragdoll skinning/blending) and the cheese wheel
+src/ragdoll.js      Verlet ragdoll (pure JS, unit-tested in node)
 src/main.js         client: rendering, input, menus/HUD, split-screen, online client (interpolation + prediction)
 server.js           Node server: serves the client + authoritative online races over WebSocket (/ws)
 config.js           optional server URL for copies of the client not served by server.js
@@ -76,9 +95,10 @@ The single-file build or a static host can be pointed at a server in two ways. S
 to the page URL. You can also type the address into the Server field on the Online screen.
 
 ### Netcode
-The server is authoritative. It runs `src/core.js` at **30 ticks/s** and broadcasts one compact JSON snapshot per
-tick, about 0.5 KB with 4 racers. Each snapshot holds racer positions, body quaternions and velocities, the cheese
-position, quaternion and velocity, and game events. Clients send their inputs at 30 Hz. They interpolate other
+The server is authoritative. It runs `src/core.js` at **30 ticks/s**, including the rigid-body cheese and the
+runners' state machines, and broadcasts one compact JSON snapshot per tick, about 0.5 KB with 4 racers. Each snapshot
+holds racer positions, body quaternions, velocities, state, stamina and balance, the cheese position, quaternion and
+velocity, and game events. Ragdolls are cosmetic, simulated on each client and tethered to the server's body position. Clients send their inputs at 30 Hz. They interpolate other
 racers about 110 ms in the past and predict their own runner with the same core code, blending toward the server
 state. Tumbles, grabs, catches and wins are only decided by the server. The cheese is shown extrapolated to "now",
 and human cheese grabs get +0.5 m of lag-compensating reach.
@@ -93,8 +113,10 @@ node tests/online.browser.test.js http://localhost:8797 # two headless browsers 
 
 ## Limitations
 * There is no audio.
-* Physics is a custom lightweight model (height-field terrain, point-mass runners, sphere-contact cheese), not a
-  full rigid-body engine. Tumbles are animated "ragdoll-ish", not real ragdolls.
+* The physics is custom and lightweight; there is no external engine. The race logic treats each runner as a point
+  mass, and ragdolls are simulated on each client and softly tethered to that authoritative body. In online play,
+  everyone sees the same body positions and outcomes, but the exact limb flailing can differ slightly between
+  screens. Ragdolls don't collide with each other or with the cheese.
 * Online: there's no account or persistence, rooms live in server memory, and prediction is soft blending rather
   than full input replay. On very high-latency connections your own runner may visibly correct after tumbles.
 * Split-screen renders the scene twice, so it needs a reasonable GPU. The game automatically lowers resolution

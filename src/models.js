@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { ST, CHARACTERS } from './core.js';
 import { makeLabelTexture } from './world.js';
+import { Ragdoll, J } from './ragdoll.js';
 
 const matCache = new Map();
 function M(c, extra) {
@@ -44,6 +45,7 @@ export function buildRunner(charIdx) {
   add(body, new THREE.CylinderGeometry(0.21, 0.18, 0.56, 7), shirt, 0, 0.38, 0);
   if (ch.stripe) { add(body, new THREE.CylinderGeometry(0.216, 0.2, 0.1, 7), M(ch.stripe), 0, 0.42, 0); add(body, new THREE.CylinderGeometry(0.2, 0.19, 0.08, 7), M(ch.stripe), 0, 0.2, 0); }
   if (ch.hat === 'cow') for (const [x, y, z] of [[0.12, 0.45, 0.17], [-0.1, 0.3, -0.18], [0.15, 0.25, -0.1]]) add(body, new THREE.IcosahedronGeometry(0.07, 0), M(0x111111), x, y, z).scale.set(1, 1, 0.4);
+  const chest = new THREE.Object3D(); chest.position.y = 0.6; body.add(chest);
   const neck = new THREE.Group(); neck.position.y = 0.68; body.add(neck);
   const head = new THREE.Group(); head.position.y = 0.15; neck.add(head);
   add(head, new THREE.IcosahedronGeometry(0.17, 1), skin);
@@ -61,22 +63,32 @@ export function buildRunner(charIdx) {
     const el = new THREE.Group(); el.position.y = -0.32; sh.add(el);
     add(el, new THREE.CapsuleGeometry(0.05, 0.22, 2, 6), skin, 0, -0.13, 0);
     add(el, new THREE.IcosahedronGeometry(0.06, 0), skin, 0, -0.29, 0);
+    const hand = new THREE.Object3D(); hand.position.y = -0.3; el.add(hand); limbs['hd' + side] = hand;
     const hip = new THREE.Group(); hip.position.set(s * 0.11, -0.04, 0); body.add(hip);
     add(hip, new THREE.CapsuleGeometry(0.078, 0.28, 2, 6), shorts, 0, -0.2, 0);
     const kn = new THREE.Group(); kn.position.y = -0.44; hip.add(kn);
     add(kn, new THREE.CapsuleGeometry(0.066, 0.28, 2, 6), skin, 0, -0.2, 0);
     add(kn, new THREE.BoxGeometry(0.12, 0.08, 0.25), shoe, 0, -0.43, 0.05);
+    const foot = new THREE.Object3D(); foot.position.set(0, -0.44, 0.03); kn.add(foot); limbs['ft' + side] = foot;
     limbs['sh' + side] = sh; limbs['el' + side] = el; limbs['hip' + side] = hip; limbs['kn' + side] = kn;
   }
-  return { root, body, neck, head, cape, limbs, ch };
+  return { root, body, neck, head, cape, limbs, ch, chest };
 }
 
 const tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler();
 const lerpA = (a, b, k) => a + (b - a) * k;
 function wrapPI(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
 
+const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _x = new THREE.Vector3(), _y = new THREE.Vector3(), _z = new THREE.Vector3();
+const _m = new THREE.Matrix4(), _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qi = new THREE.Quaternion();
+const DOWN = new THREE.Vector3(0, -1, 0), UP = new THREE.Vector3(0, 1, 0);
+const BONES = [ // group, parent group key, from joint, to joint, rest direction
+  ['shL', 'body', J.SHL, J.ELL, DOWN], ['elL', 'shL', J.ELL, J.HDL, DOWN], ['shR', 'body', J.SHR, J.ELR, DOWN], ['elR', 'shR', J.ELR, J.HDR, DOWN],
+  ['hipL', 'body', J.HIPL, J.KNL, DOWN], ['knL', 'hipL', J.KNL, J.FTL, DOWN], ['hipR', 'body', J.HIPR, J.KNR, DOWN], ['knR', 'hipR', J.KNR, J.FTR, DOWN],
+];
 export class RacerView {
   constructor(scene, info, label, labelColor) {
+    this.rd = new Ragdoll(); this.blend = null;
     this.info = info;
     this.m = buildRunner(info.char);
     this.root = this.m.root;
@@ -90,10 +102,67 @@ export class RacerView {
       this.root.add(sp); this.label = sp;
     }
   }
+  groups() { const L = this.m.limbs; return { body: this.m.body, neck: this.m.neck, shL: L.shL, elL: L.elL, shR: L.shR, elR: L.elR, hipL: L.hipL, knL: L.knL, hipR: L.hipR, knR: L.knR }; }
+  startRagdoll(s, kind) {
+    const m = this.m, L = m.limbs;
+    this.root.updateMatrixWorld(true);
+    const wp = (o) => o.getWorldPosition(new THREE.Vector3()).toArray();
+    const pts = [wp(m.body), wp(m.chest), wp(m.head), wp(L.shL), wp(L.shR), wp(L.elL), wp(L.elR), wp(L.hdL), wp(L.hdR), wp(L.hipL), wp(L.hipR), wp(L.knL), wp(L.knR), wp(L.ftL), wp(L.ftR)];
+    const sp = Math.hypot(s.vx, s.vz);
+    const fx = sp > 0.5 ? s.vx / sp : Math.sin(s.yaw), fz = sp > 0.5 ? s.vz / sp : Math.cos(s.yaw);
+    // forward roll axis = up x forward
+    const roll = kind === 'dive' ? 3.2 : 2.5 + sp * 0.45;
+    const wx = fz * roll + (Math.random() - 0.5) * 2, wy = (Math.random() - 0.5) * 3, wz = -fx * roll + (Math.random() - 0.5) * 2;
+    this.rd.init(pts, [s.vx, (s.vy || 0) + (kind === 'dive' ? 2.5 : 1.5), s.vz], [wx, wy, wz]);
+    this.blend = null;
+  }
+  poseFromRagdoll() {
+    const rd = this.rd, m = this.m, g = this.groups();
+    const P = (i) => _v.set(rd.p[i * 3], rd.p[i * 3 + 1], rd.p[i * 3 + 2]);
+    const pel = P(J.PELVIS).clone();
+    this.root.position.set(pel.x, pel.y - 0.95, pel.z);
+    this.root.quaternion.identity();
+    m.body.position.set(0, 0.95, 0);
+    _y.copy(P(J.CHEST)).sub(pel).normalize();
+    _x.copy(P(J.SHL)).sub(_v2.copy(P(J.SHR))).add(_v2.copy(P(J.HIPL)).sub(P(J.HIPR)));
+    _x.addScaledVector(_y, -_x.dot(_y)).normalize();
+    _z.crossVectors(_x, _y);
+    _m.makeBasis(_x, _y, _z);
+    m.body.quaternion.setFromRotationMatrix(_m);
+    const world = { body: m.body.quaternion.clone() };
+    const setBone = (grp, parentQ, a, b, rest) => {
+      _v2.set(rd.p[b * 3] - rd.p[a * 3], rd.p[b * 3 + 1] - rd.p[a * 3 + 1], rd.p[b * 3 + 2] - rd.p[a * 3 + 2]).normalize();
+      _qi.copy(parentQ).invert();
+      _v2.applyQuaternion(_qi);
+      grp.quaternion.setFromUnitVectors(rest, _v2);
+      return parentQ.clone().multiply(grp.quaternion);
+    };
+    setBone(g.neck, world.body, J.CHEST, J.HEAD, UP);
+    for (const [k, parent, a, b, rest] of BONES) world[k] = setBone(g[k], world[parent], a, b, rest);
+  }
+  endRagdoll() {
+    const g = this.groups();
+    this.blend = { t: 0, rootPos: this.root.position.clone(), rootQ: this.root.quaternion.clone(), bodyPos: this.m.body.position.clone(), q: {} };
+    for (const k in g) { this.blend.q[k] = g[k].quaternion.clone(); g[k].quaternion.identity(); }
+    this.rd.active = false;
+  }
   // s: {x,y,z, yaw,pitch,roll, state, flags, vx,vz, st}
   apply(s, dt, particles) {
     const m = this.m, L = m.limbs, b = m.body;
     this.t += dt;
+    // --- physics ragdoll while diving / tumbling ---
+    if (s.state === ST.DIVE || s.state === ST.TUMBLE) {
+      if (!this.rd.active) this.startRagdoll(s, s.state === ST.DIVE ? 'dive' : 'tumble');
+      const tether = [s.x, s.y + (s.state === ST.DIVE ? 0.55 : 0.3), s.z];
+      this.rd.update(dt, tether, s.state === ST.TUMBLE ? 1 : 0.4);
+      this.poseFromRagdoll();
+      this.kickCd = (this.kickCd || 0) - dt;
+      if (particles && this.rd.impact > 3.5 && this.kickCd <= 0) { this.kickCd = 0.12; const c = this.rd.center(); particles.kick(c[0], c[1] - 0.25, c[2], s.vx, s.vz, Math.min(10, this.rd.impact)); }
+      if (m.cape) m.cape.rotation.x = -1.2 + Math.sin(this.t * 20) * 0.3;
+      this.prevState = s.state;
+      return;
+    }
+    if (this.rd.active) { this.endRagdoll(); this.prevState = ST.GETUP; }
     const k = 1 - Math.exp(-14 * dt);
     this.root.position.set(s.x, s.y, s.z);
     this.root.rotation.set(0, s.yaw, 0);
@@ -147,10 +216,10 @@ export class RacerView {
         break;
       }
       case ST.GETUP: {
-        const f = Math.min(1, (s.st || 0) / 0.7);
-        const e = f * f * (3 - 2 * f);
-        direct = true; pitch = lerpA(this.lastPitch, 0.1, e); roll = lerpA(this.lastRoll, 0, e); bodyY = lerpA(0.5, 0.92, e);
-        tgt.hipL = -1.2 * (1 - e); tgt.knL = 1.6 * (1 - e) + 0.2; tgt.hipR = -0.5 * (1 - e); tgt.knR = 0.8 * (1 - e) + 0.2; tgt.shL = 0.6 * (1 - e); tgt.shR = 0.6 * (1 - e); tgt.elL = tgt.elR = -0.6;
+        const f = Math.min(1, (s.st || 0) / 0.8);
+        pitch = 0.5 * (1 - f) + 0.1; bodyY = 0.7 + 0.25 * f;
+        tgt.hipL = -1.1 * (1 - f); tgt.knL = 1.5 * (1 - f) + 0.2; tgt.hipR = -0.4 * (1 - f); tgt.knR = 0.8 * (1 - f) + 0.2;
+        tgt.shL = 0.5 * (1 - f); tgt.shR = 0.5 * (1 - f); tgt.elL = tgt.elR = -0.6; tgt.shZL = 0.3; tgt.shZR = -0.3;
         break;
       }
       case ST.CELEBRATE: {
@@ -174,6 +243,18 @@ export class RacerView {
     L.knL.rotation.x = lerpA(L.knL.rotation.x, tgt.knL, kk); L.knR.rotation.x = lerpA(L.knR.rotation.x, tgt.knR, kk);
     m.neck.rotation.x = state === ST.DIVE ? -0.9 : state === ST.RUN ? -pitch * 0.6 : 0;
     if (m.cape) m.cape.rotation.x = lerpA(m.cape.rotation.x, -Math.min(1.3, 0.15 + sp * 0.09) + Math.sin(this.t * 14) * 0.08, k);
+    // blend out of the ragdoll pose while getting up
+    if (this.blend) {
+      const B = this.blend;
+      B.t += dt;
+      const f = Math.min(1, B.t / 0.75), e = f * f * (3 - 2 * f);
+      if (f >= 1) { this.blend = null; return; }
+      const g = this.groups();
+      for (const k in g) { _qa.copy(g[k].quaternion); g[k].quaternion.copy(B.q[k]).slerp(_qa, e); }
+      _qb.copy(this.root.quaternion); this.root.quaternion.copy(B.rootQ).slerp(_qb, e);
+      this.root.position.lerpVectors(B.rootPos, _v.copy(this.root.position), e);
+      b.position.lerpVectors(B.bodyPos, _v.copy(b.position), e);
+    }
   }
   dispose(scene) { scene.remove(this.root); }
 }
