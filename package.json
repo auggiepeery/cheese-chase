@@ -1,0 +1,17 @@
+{
+  "name": "cheese-chase",
+  "version": "1.0.0",
+  "description": "Cheese Chase: an original 3D browser game about chasing a runaway cheese wheel down a very steep hill. Solo vs AI and local split-screen work offline; online rooms via a small Node WebSocket server.",
+  "type": "module",
+  "main": "server.js",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js",
+    "build": "node build.mjs",
+    "test": "node tests/sim.test.js && node tests/net.test.js",
+    "test:browser": "node tests/browser.test.js"
+  },
+  "license": "MIT",
+  "dependencies": { "ws": "^8.18.0" },
+  "devDependencies": { "esbuild": "^0.25.0", "three": "0.170.0", "puppeteer-core": "^24.0.0" }
+}

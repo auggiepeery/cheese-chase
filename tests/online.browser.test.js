@@ -1,0 +1,48 @@
+// Two headless browsers play online through a running server: node tests/online.browser.test.js http://localhost:8797
+import puppeteer from 'puppeteer-core';
+const base = (process.argv[2] || 'http://localhost:8797').replace(/\/$/, '');
+const exe = process.env.CHROME || '/usr/bin/google-chrome';
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const args = ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
+const errors = [];
+async function open(tag, url) {
+  const b = await puppeteer.launch({ executablePath: exe, headless: 'new', args });
+  const p = await b.newPage(); await p.setViewport({ width: 800, height: 450 });
+  p.on('console', (m) => { if (m.type() === 'error') errors.push(`${tag}: ${m.text()}`); });
+  p.on('pageerror', (e) => errors.push(`${tag} pageerror: ${e.message}`));
+  await p.goto(url, { waitUntil: 'load' });
+  return { b, p };
+}
+const A = await open('A', base + '/?quality=low');
+await sleep(1500);
+await A.p.click('#btn-online'); await sleep(400);
+await A.p.click('#select-go'); await sleep(400);
+const serverField = await A.p.$eval('#server-url', (e) => e.value);
+console.log('server field auto-filled:', serverField);
+await A.p.type('#player-name', 'Alice');
+await A.p.click('#online-create');
+await A.p.waitForFunction(() => window.__cc.online.code, { timeout: 30000 });
+const code = await A.p.evaluate(() => window.__cc.online.code);
+console.log('room', code);
+const B = await open('B', `${base}/?quality=low&room=${code}`);
+await sleep(1500);
+await B.p.type('#player-name', 'Bob');
+await B.p.click('#select-go'); await sleep(300);
+await B.p.click('#online-join');
+await A.p.waitForFunction(() => document.querySelectorAll('#lobby-players li').length === 2, { timeout: 30000 });
+console.log('both in lobby');
+await A.p.screenshot({ path: 'shots/online-lobby.png' });
+await A.p.select('#lobby-bots', '2');
+await A.p.click('#lobby-start');
+await B.p.waitForFunction(() => window.__cc.online.inRace && window.__cc.online.snaps.length > 5, { timeout: 30000 });
+await A.p.keyboard.down('KeyW'); await B.p.keyboard.down('KeyW');
+await sleep(12000);
+const sa = await A.p.evaluate(() => ({ phase: window.__cc.online.phase, views: window.__cc.game.racerViews.size, me: window.__cc.online.me && +window.__cc.online.me.z.toFixed(1), rtt: +window.__cc.online.rtt.toFixed(3) }));
+const sb = await B.p.evaluate(() => ({ phase: window.__cc.online.phase, views: window.__cc.game.racerViews.size, me: window.__cc.online.me && +window.__cc.online.me.z.toFixed(1), rtt: +window.__cc.online.rtt.toFixed(3) }));
+console.log('A', sa, 'B', sb);
+await A.p.screenshot({ path: 'shots/online-A.png' }); await B.p.screenshot({ path: 'shots/online-B.png' });
+await A.b.close(); await B.b.close();
+const ok = sa.views === 4 && sb.views === 4 && sa.me > 5 && sb.me > 5 && !errors.length;
+console.log(errors.length ? 'ERRORS:\n' + errors.join('\n') : 'no console errors');
+console.log(ok ? 'online.browser.test OK' : 'online.browser.test FAILED');
+process.exit(ok ? 0 : 1);

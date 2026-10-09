@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%80%3C/text%3E%3C/svg%3E">
+<title>Cheese Chase — a downhill dash after a runaway wheel</title>
+<style>
+  :root { --gold:#ffd34d; --ink:#1b1408; --cream:#fff6dc; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#9cc3de; font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; color:#fff; user-select:none; }
+  #c { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  #vignette { position:fixed; inset:0; pointer-events:none; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.38) 100%); }
+  .screen { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background: radial-gradient(ellipse at center, rgba(20,30,10,0.35), rgba(10,15,5,0.7)); z-index:20; }
+  .screen.show { display:flex; }
+  .card { background: rgba(255,246,220,0.96); color: var(--ink); border-radius: 22px; padding: 28px 34px; max-width: 760px; width: calc(100% - 40px); box-shadow: 0 20px 60px rgba(0,0,0,0.45), inset 0 -6px 0 rgba(200,140,40,0.35); text-align:center; max-height: calc(100% - 30px); overflow:auto; }
+  h1 { margin: 0 0 4px; font-size: 64px; letter-spacing: 1px; color:#f2a516; text-shadow: 0 4px 0 #b35f12, 0 8px 18px rgba(0,0,0,0.3); font-weight: 900; }
+  h1 .wheel { display:inline-block; animation: roll 2.4s linear infinite; }
+  @keyframes roll { from { transform: rotate(0) } to { transform: rotate(360deg) } }
+  h2 { margin: 0 0 10px; color:#7a4a10; }
+  .tag { margin: 0 0 18px; font-size: 17px; color:#5b4320; }
+  .btn { display:inline-block; border:0; cursor:pointer; font: inherit; font-weight: 800; font-size: 19px; padding: 13px 24px; margin: 6px; border-radius: 14px; background: var(--gold); color: var(--ink); box-shadow: 0 5px 0 #c58a12; transition: transform .08s; }
+  .btn:hover { transform: translateY(-2px); } .btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #c58a12; }
+  .btn.alt { background:#e9dcc0; box-shadow: 0 5px 0 #b9a882; }
+  .btn.green { background:#7dde6a; box-shadow:0 5px 0 #3f9a33; }
+  .modes { display:flex; flex-wrap:wrap; justify-content:center; gap:4px; }
+  .modes .btn { min-width: 210px; }
+  .modes .btn small { display:block; font-weight:600; font-size: 13px; opacity:.75; }
+  .controls { display:grid; grid-template-columns: auto auto; gap: 4px 18px; text-align:left; margin: 16px auto 0; width: fit-content; font-size: 15px; }
+  .controls b { display:inline-block; min-width: 120px; color:#7a4a10; }
+  kbd { background:#fff; border:1px solid #c9b48a; border-bottom-width:3px; border-radius:6px; padding: 1px 6px; font-size: 13px; color:#333; }
+  .fine { font-size: 12.5px; color:#7b6a4a; margin-top: 14px; }
+  #select-panels { display:flex; justify-content:center; gap: 22px; flex-wrap: wrap; }
+  .sel-panel { background:#f3e6c4; border-radius: 16px; padding: 12px; }
+  .sel-panel canvas { width: 240px; height: 300px; background: linear-gradient(#bfe0f5, #e9f3d9); border-radius: 12px; display:block; }
+  .sel-title { font-weight: 900; color:#7a4a10; margin-bottom: 6px; }
+  .sel-row { display:flex; align-items:center; justify-content:space-between; margin-top: 8px; }
+  .sel-row button { font-size: 20px; border:0; background: var(--gold); border-radius: 10px; width: 44px; height: 40px; cursor:pointer; box-shadow: 0 3px 0 #c58a12; }
+  .sel-name { font-weight: 800; font-size: 18px; }
+  .sel-note { font-size: 12px; color:#8a7650; margin-top: 6px; }
+  .form { display:grid; grid-template-columns: 140px 1fr; gap: 10px; text-align:left; align-items:center; margin: 10px 0; }
+  .form input, .form select { font: inherit; padding: 9px 12px; border-radius: 10px; border: 2px solid #d9c595; background:#fff; }
+  #online-status { min-height: 22px; font-weight: 700; color:#2f6d1f; } #online-status.err { color:#b3261e; }
+  #lobby-code { font-size: 48px; font-weight: 900; letter-spacing: 8px; color:#c0392b; }
+  #lobby-players { list-style:none; padding:0; margin: 10px 0; text-align:left; max-width: 380px; margin: 10px auto; }
+  #lobby-players li { background:#f3e6c4; margin: 4px 0; padding: 8px 12px; border-radius: 10px; font-weight: 700; }
+  #lobby-players small { color:#8a7650; font-weight:600; margin-left: 6px; }
+  #res-title { font-size: 44px; margin: 0; font-weight: 900; } #res-title.win { color:#e08a00; } #res-title.lose { color:#7a4a10; }
+  #res-table { margin: 14px auto; border-collapse: collapse; min-width: 70%; }
+  #res-table td { padding: 6px 12px; border-bottom: 1px solid #e3d3a9; text-align:left; }
+  #res-table tr.me td { background: #ffe9a6; font-weight: 800; }
+  /* HUD */
+  #huds { position:fixed; inset:0; pointer-events:none; z-index: 5; }
+  .hud { position:absolute; top:0; bottom:0; left:0; width:100%; text-shadow: 0 2px 4px rgba(0,0,0,0.6); }
+  .hud + .hud { border-left: 3px solid rgba(255,255,255,0.7); }
+  .hud-tl { position:absolute; top: 14px; left: 18px; }
+  .hud-label { font-size: 13px; font-weight: 800; letter-spacing: 1px; opacity: .85; }
+  .timer { font-size: 34px; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .hud-tr { position:absolute; top: 12px; right: 18px; text-align:right; }
+  .pos { font-size: 46px; font-weight: 900; color: var(--gold); line-height: 1; } .pos sup { font-size: 22px; }
+  .of { font-size: 14px; opacity: .8; }
+  .hud-bl { position:absolute; bottom: 18px; left: 18px; }
+  .speed { font-size: 16px; } .speed b { font-size: 34px; font-variant-numeric: tabular-nums; }
+  .meter { position: relative; width: 190px; height: 14px; background: rgba(0,0,0,0.35); border-radius: 8px; overflow: hidden; margin: 6px 0; border: 2px solid rgba(255,255,255,0.6); }
+  .meter-fill { height:100%; width:0; background:#7dff8a; transition: width .1s; }
+  .meter span { position:absolute; inset:0; font-size: 9px; font-weight: 900; letter-spacing: 2px; text-align:center; line-height: 10px; color: rgba(255,255,255,0.9); }
+  .cheese-dist { font-weight: 800; font-size: 16px; }
+  .hud-msg { position:absolute; top: 28%; left:0; right:0; text-align:center; font-size: 46px; font-weight: 900; opacity:0; transform: scale(.7); transition: opacity .15s, transform .15s; }
+  .hud-msg.show { opacity: 1; transform: scale(1); }
+  .hud-msg.red { color:#ff6b5b; } .hud-msg.gold { color: var(--gold); } .hud-msg.go { color:#7dff8a; font-size: 80px; } .hud-msg.big { font-size: 60px; }
+  .hud-hint { position:absolute; bottom: 22%; left:0; right:0; text-align:center; font-size: 22px; font-weight: 900; opacity:0; transition: opacity .15s; }
+  .hud-hint.show { opacity: 1; } .hud-hint.hot { color: var(--gold); font-size: 30px; animation: pulse .4s infinite alternate; }
+  @keyframes pulse { to { transform: scale(1.08); } }
+  #countdown { position:fixed; left:0; right:0; top: 38%; text-align:center; font-size: 120px; font-weight: 900; color: var(--gold); text-shadow: 0 6px 0 #b35f12, 0 10px 30px rgba(0,0,0,0.5); opacity:0; pointer-events:none; z-index: 6; }
+  #countdown.show { opacity:1; }
+  #progress { position:fixed; left: 8px; top: 18%; height: 60%; width: 8px; background: rgba(255,255,255,0.35); border-radius: 4px; z-index: 6; display:none; }
+  body.racing #progress { display:block; }
+  .pdot { position:absolute; left: -4px; width: 16px; height: 16px; margin-top: -8px; border-radius: 50%; border: 2px solid #fff; }
+  .pdot.me { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(255,211,77,0.6); z-index: 2; }
+  .pdot.cheese { background: none !important; border: 0; font-size: 16px; left: 10px; }
+  #feed { position:fixed; top: 80px; left: 50%; transform: translateX(-50%); text-align:center; z-index: 6; pointer-events:none; }
+  .feed-item { background: rgba(0,0,0,0.42); padding: 5px 14px; border-radius: 12px; margin: 4px; font-weight: 700; font-size: 15px; transition: opacity 1s; }
+  .feed-item.fade { opacity: 0; }
+  #touch { display:none; position:fixed; inset:0; pointer-events:none; z-index: 7; }
+  body:not(.racing) #touch { display:none !important; }
+  #touch button { pointer-events:auto; position:absolute; width: 70px; height: 70px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.7); background: rgba(0,0,0,0.3); color:#fff; font-weight: 900; font-size: 13px; }
+  #esc-hint { position:fixed; right: 12px; bottom: 10px; font-size: 12px; opacity: .7; z-index: 6; display:none; }
+  body.racing #esc-hint { display:block; }
+  #noscript-msg { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:#333; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="vignette"></div>
+<div id="huds"></div>
+<div id="countdown"></div>
+<div id="progress"></div>
+<div id="feed"></div>
+<div id="esc-hint">Esc: quit to menu</div>
+<div id="touch">
+  <button id="t-left" style="left:20px;bottom:110px">◀</button><button id="t-right" style="left:100px;bottom:110px">▶</button>
+  <button id="t-run" style="left:60px;bottom:190px">RUN</button><button id="t-brake" style="left:60px;bottom:30px">BRAKE</button>
+  <button id="t-dive" style="right:20px;bottom:30px">DIVE</button><button id="t-grab" style="right:100px;bottom:80px">GRAB🧀</button><button id="t-tackle" style="right:20px;bottom:120px">GRAB👤</button>
+</div>
+
+<div id="screen-menu" class="screen">
+  <div class="card">
+    <h1><span class="wheel">🧀</span> Cheese Chase</h1>
+    <p class="tag">A wheel of cheese. A ridiculously steep hill. Absolutely no dignity.</p>
+    <div class="modes">
+      <button class="btn" id="btn-solo">1 · Solo vs AI<small>5 computer rivals · works offline</small></button>
+      <button class="btn green" id="btn-split">2 · Local 2-Player<small>split-screen on one keyboard</small></button>
+      <button class="btn alt" id="btn-online">3 · Online Multiplayer<small>rooms with 4-letter codes</small></button>
+    </div>
+    <div class="controls">
+      <span><b>Run / steer</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows</span><span><b>Brake / steady</b> <kbd>S</kbd> / <kbd>↓</kbd></span>
+      <span><b>Dive</b> <kbd>Space</kbd></span><span><b>Grab the cheese</b> <kbd>E</kbd></span>
+      <span><b>Grab a racer</b> <kbd>F</kbd> (slows / trips them)</span><span><b>Quit</b> <kbd>Esc</kbd> · <b>Rematch</b> <kbd>R</kbd></span>
+    </div>
+    <p class="fine">Catch the cheese (get close and press <kbd>E</kbd>) or be first over the finish line to win. Go too fast, or land hard off a bump, and you'll tumble head over heels — keep an eye on your BALANCE bar.<br>
+    2-player: P1 = WASD, Space dive, E grab cheese, F grab racer · P2 = Arrows, Enter dive, <kbd>.</kbd> grab cheese, <kbd>/</kbd> grab racer.<br>
+    An original game inspired by the traditional cheese-rolling races of Gloucestershire.</p>
+  </div>
+</div>
+
+<div id="screen-select" class="screen">
+  <div class="card">
+    <h2>Pick your runner — <span id="select-mode"></span></h2>
+    <div id="select-panels"></div>
+    <div style="margin-top:14px"><button class="btn alt" id="select-back">◀ Back</button><button class="btn" id="select-go">START RACE ▶</button></div>
+    <p class="fine">Enter / Space to continue · Esc to go back</p>
+  </div>
+</div>
+
+<div id="screen-online" class="screen">
+  <div class="card">
+    <h2>Online Multiplayer</h2>
+    <div class="form">
+      <label for="player-name">Your name</label><input id="player-name" maxlength="16" placeholder="Runner">
+      <label for="server-url">Server</label><input id="server-url" placeholder="https://your-app.onrender.com">
+      <label for="room-code">Room code</label><input id="room-code" maxlength="4" placeholder="ABCD (to join)" style="text-transform:uppercase">
+    </div>
+    <div id="online-status"></div>
+    <div><button class="btn alt" id="online-back">◀ Menu</button><button class="btn green" id="online-create">Create room</button><button class="btn" id="online-join">Join room</button></div>
+    <p class="fine" id="online-note">When the game is served by its own server, the server address is filled in automatically.</p>
+  </div>
+</div>
+
+<div id="screen-lobby" class="screen">
+  <div class="card">
+    <h2>Room</h2>
+    <div id="lobby-code">----</div>
+    <div style="display:flex;gap:8px;max-width:520px;margin:6px auto"><input id="lobby-link" readonly style="flex:1;font:inherit;padding:8px;border-radius:10px;border:2px solid #d9c595"><button class="btn alt" id="lobby-copy" style="margin:0;padding:8px 14px">Copy</button></div>
+    <ul id="lobby-players"></ul>
+    <div class="form" style="max-width:380px;margin:10px auto"><label for="lobby-bots">AI racers</label>
+      <select id="lobby-bots"><option>0</option><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select></div>
+    <div id="lobby-wait" class="fine"></div>
+    <div><button class="btn alt" id="lobby-leave">Leave</button><button class="btn green" id="lobby-start">Start race ▶</button></div>
+  </div>
+</div>
+
+<div id="screen-results" class="screen">
+  <div class="card">
+    <div id="res-title"></div>
+    <div id="res-sub" class="tag"></div>
+    <table id="res-table"></table>
+    <div id="res-best" class="fine"></div>
+    <div id="res-wait" class="fine">Waiting for the host to start the next race…</div>
+    <div><button class="btn alt" id="btn-menu">Main menu (Esc)</button><button class="btn" id="btn-again">Race again (R)</button></div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
