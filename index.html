@@ -79,6 +79,12 @@
     -webkit-mask-image: radial-gradient(ellipse at 50% 45%, transparent 38%, #000 80%); mask-image: radial-gradient(ellipse at 50% 45%, transparent 38%, #000 80%); animation: lines .12s steps(2) infinite; }
   @keyframes lines { 50% { transform: rotate(1.5deg) scale(1.02); } }
   .cheese-arrow { position:absolute; display:none; width: 48px; height: 48px; margin: -24px 0 0 -24px; font-size: 26px; line-height: 48px; text-align:center; background: rgba(0,0,0,0.45); border: 2px solid var(--gold); border-radius: 50%; pointer-events:none; animation: pulse .5s infinite alternate; }
+  .cheese-mark { position:absolute; display:none; pointer-events:none; transform: translate(-50%, -100%); text-align:center; animation: bob 0.9s ease-in-out infinite alternate; }
+  .cheese-mark span { display:block; width: 34px; height: 34px; margin: 0 auto; line-height: 30px; font-size: 20px; border-radius: 50%; background: #ffd34d; border: 3px solid #3a2400; box-shadow: 0 0 12px rgba(255,210,80,0.9); }
+  .cheese-mark i { display:block; width:0; height:0; margin: -1px auto 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 11px solid #3a2400; }
+  .cheese-mark b { position:absolute; left: 38px; top: 9px; white-space: nowrap; font-size: 12px; font-weight: 900; color:#fff; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
+  .cheese-mark.near span { background:#9dff6a; }
+  @keyframes bob { from { margin-top: 0; } to { margin-top: -7px; } }
   .cheese-arrow i { position:absolute; inset:-14px; font-style:normal; color: var(--gold); font-size: 20px; line-height: 76px; text-align:right; }
   .charges { font-size: 11px; font-weight: 900; letter-spacing: 1px; margin: 2px 0 4px; } .charges b { color: var(--gold); font-size: 15px; } .charges i { font-style: normal; opacity: .3; font-size: 15px; }
   #res-board { margin: 8px auto; } .chips { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:6px; } .chip { background:#f3e2b3; border-radius: 12px; padding: 3px 10px; font-weight: 700; font-size: 14px; } .chip.me { background:#ffd34d; } .board-title { font-weight: 900; color: #b35f12; }
@@ -130,13 +136,14 @@
       <button class="btn green" id="btn-split">2 · Local 2-Player<small>split-screen on one keyboard</small></button>
       <button class="btn alt" id="btn-online">3 · Online Multiplayer<small>rooms with 4-letter codes</small></button>
     </div>
+    <div><button class="btn alt" id="btn-quality" style="padding:6px 14px;font-size:14px">Graphics: Auto</button></div>
     <div class="controls">
       <span><b>Run / steer</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows</span><span><b>Brake</b> <kbd>S</kbd> / <kbd>↓</kbd> (calms your balance)</span>
       <span><b>Sprint</b> hold <kbd>Shift</kbd> (2.2 s, refills when released)</span><span><b>Jump / dive</b> <kbd>Space</kbd></span>
-      <span><b>Grab</b> <kbd>E</kbd> (the cheese if close, else a racer)</span><span><b>Mid-tumble</b> <kbd>Space</kbd> = roll-jump (2 charges) / get up</span>
+      <span><b>Grab</b> <kbd>E</kbd> or <kbd>F</kbd> (the cheese if close, else a racer)</span><span><b>Mid-tumble</b> <kbd>Space</kbd> = roll-jump (2 charges) / get up</span>
       <span><b>Sound</b> <kbd>M</kbd> mute</span><span><b>Quit</b> <kbd>Esc</kbd> · <b>Next heat</b> <kbd>R</kbd></span>
     </div>
-    <p class="fine">Catch the cheese or be first over the line. Best of 3 heats. Rolling down the hill is <i>fast</i>: tumble, then press <kbd>Space</kbd> to launch yourself at the cheese and steer in the air. Jump near the cheese and you dive at it automatically (a dive that reaches it grabs it). A well-timed jump on smooth ground lands clean with a speed boost; a bad one sends you rolling. Too much speed or wild steering fills your balance meter.<br>
+    <p class="fine">Catch the cheese or be first over the line. A match is 3 heats, decided on points (10/7/5/3/2/1). Rolling keeps about the same speed as running: tumble, then press <kbd>Space</kbd> to roll-jump at the cheese and steer in the air. Jump near the cheese and you dive at it automatically (a dive that reaches it grabs it). Jumps have a 2 s cooldown; a soft landing is clean (with a small boost if you jumped off a crest), a hard one sends you rolling. Too much speed or wild steering fills your balance meter; brake to calm it.<br>
     2-player: P1 = WASD, Left Shift sprint, Space jump, E grab · P2 = Arrows, Right Shift / Num0 sprint, Enter jump, <kbd>/</kbd> or <kbd>.</kbd> / Num1 grab.<br>
     An original game inspired by the traditional cheese-rolling races of Gloucestershire.</p>
   </div>

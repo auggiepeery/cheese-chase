@@ -13,6 +13,7 @@ export const TRACK_HALF = 21.2;
 export const FENCE_X = 23.6;
 export const CHEESE_R = 0.5;
 export const CHEESE_HT = 0.17;     // half thickness of the wheel
+export const RELEASE_CD = 2.0;    // the cheese goes when the countdown has this long left (race clock starts here)
 export const COUNTDOWN = 4.5;      // seconds; cheese released 2 s before racers
 export const ST = { IDLE: 0, RUN: 1, DIVE: 2, TUMBLE: 3, GETUP: 4, CELEBRATE: 5 };
 const K_DRAG = 0.08, POWER = 6.0, SPRINT_POWER = 12.5, DANGER = 10.5, SLOPE_RUN = 0.5, SPRINT_TIME = 2.2;
@@ -552,7 +553,7 @@ function substep(race, dt, inputs) {
   const c = race.cheese;
   if (race.phase === 'countdown') {
     race.cd -= dt;
-    if (race.cd <= 2.0 && !c.released) { releaseCheese(race, c); race.events.push({ e: 'release' }); }
+    if (race.cd <= RELEASE_CD && !c.released) { releaseCheese(race, c); race.events.push({ e: 'release' }); }
     if (race.cd <= 0) {
       race.phase = 'race'; race.raceT = 0;
       for (const r of race.racers) { r.state = ST.RUN; r.st = 0; }

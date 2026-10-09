@@ -147,13 +147,14 @@ function makeHud(label, splitIdx, splitCount) {
     <div class="hud-msg"></div>
     <div class="hud-hint"></div>
     <div class="cheese-arrow">🧀<i>➤</i></div>
+    <div class="cheese-mark"><span>🧀</span><i></i><b></b></div>
     <div class="hud-bl"><div class="speed"><b>0</b> km/h</div>
       <div class="meter"><div class="meter-fill"></div><span>BALANCE</span></div>
       <div class="meter stam"><div class="meter-fill stam-fill"></div><span>SPRINT</span></div>
       <div class="charges" title="roll-jumps"></div>
       <div class="cheese-dist"></div></div>`;
   $('#huds').appendChild(el);
-  return { el, timer: el.querySelector('.timer'), pos: el.querySelector('.pos'), of: el.querySelector('.of'), msg: el.querySelector('.hud-msg'), hint: el.querySelector('.hud-hint'), speed: el.querySelector('.speed b'), meter: el.querySelector('.meter-fill'), stam: el.querySelector('.stam-fill'), cdist: el.querySelector('.cheese-dist'), charges: el.querySelector('.charges'), lines: el.querySelector('.speedlines'), arrow: el.querySelector('.cheese-arrow'), arrowI: el.querySelector('.cheese-arrow i'), feed: el.querySelector('.hud-feed'), callout: el.querySelector('.hud-callout'), msgT: 0, calloutT: 0, calloutCd: 0 };
+  return { el, timer: el.querySelector('.timer'), pos: el.querySelector('.pos'), of: el.querySelector('.of'), msg: el.querySelector('.hud-msg'), hint: el.querySelector('.hud-hint'), speed: el.querySelector('.speed b'), meter: el.querySelector('.meter-fill'), stam: el.querySelector('.stam-fill'), cdist: el.querySelector('.cheese-dist'), charges: el.querySelector('.charges'), lines: el.querySelector('.speedlines'), arrow: el.querySelector('.cheese-arrow'), arrowI: el.querySelector('.cheese-arrow i'), mark: el.querySelector('.cheese-mark'), markD: el.querySelector('.cheese-mark b'), feed: el.querySelector('.hud-feed'), callout: el.querySelector('.hud-callout'), msgT: 0, calloutT: 0, calloutCd: 0 };
 }
 // in-race text popups were removed on request: these stay as no-ops so event handling remains simple
 const POPUPS = false;
@@ -244,8 +245,9 @@ function updateOffline(dt) {
   const inputs = {};
   for (const v of game.views) inputs[v.racerId] = v.ctrl.read();
   let n = 0;
-  while (game.acc >= Core.C.SUB && n < 8) { Core.step(race, Core.C.SUB, inputs); game.acc -= Core.C.SUB; n++; handleEvents(race.events); race.events = []; }
-  if (n >= 8) game.acc = 0;
+  const maxN = Math.ceil(1.0 / Core.C.SUB) + 1; // up to 1 s of catch-up per frame: the game clock keeps real time
+  while (game.acc >= Core.C.SUB && n < maxN) { Core.step(race, Core.C.SUB, inputs); game.acc -= Core.C.SUB; n++; handleEvents(race.events); race.events = []; }
+  if (n >= maxN) game.acc = 0;
   for (const r of race.racers) {
     const rv = game.racerViews.get(r.id);
     rv.apply(stateFromRacer(r), dt, particles); rv.lastSp = Math.hypot(r.vx, r.vz); rv.lastState = r.state; rv.lastGrounded = r.grounded;
@@ -331,6 +333,29 @@ function audioNear(p) { return game.views.some((v) => v.camPos && v.camPos.dista
 // ---------------------------------------------------------------------------
 const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : (n % 10 < 4 ? n % 10 : 0)] || 'th');
 function fmtTime(t) { t = Math.max(0, t); const m = Math.floor(t / 60), s = t - m * 60; return `${m}:${s < 10 ? '0' : ''}${s.toFixed(2)}`; }
+// runners right in front of a camera (or between it and its player) turn see-through
+const _fa = new THREE.Vector3(), _fb = new THREE.Vector3(), _fc = new THREE.Vector3();
+function fadeBlockers() {
+  for (const [id, rv] of game.racerViews) {
+    let a = 1;
+    for (const v of game.views) {
+      if (!v.camPos || id === v.racerId) continue;
+      const me = game.racerViews.get(v.racerId);
+      _fc.copy(rv.root.position); _fc.y += 0.9 * rv.m.H;
+      const dCam = v.cam.position.distanceTo(_fc);
+      a = Math.min(a, 0.25 + 0.75 * Math.max(0, Math.min(1, (dCam - 2.5) / 3)));
+      if (me) {
+        // distance from the camera -> player sight line, only if this runner is nearer than the player
+        _fa.copy(v.cam.position); _fb.copy(me.root.position); _fb.y += 0.9 * me.m.H;
+        const ab = _fb.clone().sub(_fa), L = ab.length(); ab.divideScalar(L || 1);
+        const tproj = _fc.clone().sub(_fa).dot(ab);
+        if (tproj > 0.5 && tproj < L - 0.6) { const off = _fc.clone().sub(_fa).addScaledVector(ab, -tproj).length(); if (off < 0.9) a = Math.min(a, 0.3 + 0.7 * (off / 0.9)); }
+      }
+    }
+    rv.setFade(a);
+    if (a < 0.6 && rv.tag) rv.tag.visible = false; // no floating tag on a see-through runner
+  }
+}
 // top-3 place tags over other racers, plus ONE tiny corner callout for overtakes that involve this player
 let _hudPrevT = performance.now();
 function updateTagsAndCallouts(phase, sorted) {
@@ -353,12 +378,14 @@ function updateTagsAndCallouts(phase, sorted) {
     if (h.calloutCd <= 0 || !v.prevAhead) v.prevAhead = ahead; // hold the baseline during the cooldown so flip-flops don't spam
   }
 }
+// the race clock runs from the cheese release (RELEASE_CD before "GO"), not from GO
+function clockFrom(phase, cd, raceT) { return phase === 'countdown' ? Math.max(0, Core.RELEASE_CD - cd) : raceT + Core.RELEASE_CD; }
 function updateHUDs(phase, cd, raceT, racers, cheese) {
   const sorted = Core.rankRacers(racers, null);
   for (const v of game.views) {
     const me = racers.find((r) => r.id === v.racerId);
     const h = v.hud;
-    h.timer.textContent = phase === 'countdown' ? '0:00.00' : fmtTime(raceT);
+    h.timer.textContent = fmtTime(clockFrom(phase, cd, raceT));
     if (!me) { h.pos.textContent = 'SPECTATING'; continue; }
     const rank = sorted.findIndex((r) => r.id === me.id) + 1;
     h.pos.innerHTML = ordinal(rank).replace(/(\d+)(\D+)/, '$1<sup>$2</sup>'); h.of.textContent = `of ${racers.length}`;
@@ -460,12 +487,25 @@ function updateCamera(v, dt, phase) {
 }
 // off-screen arrow pointing at the cheese (per view)
 function updateCheeseArrow(v) {
-  const a = v.hud.arrow;
-  if (!game.mode || !cheeseView.group.visible || cheeseHeld) { a.style.display = 'none'; return; }
-  _proj.copy(cheeseView.group.position).project(v.cam);
+  const a = v.hud.arrow, mk = v.hud.mark;
+  if (!game.mode || cheeseHeld) { a.style.display = 'none'; mk.style.display = 'none'; return; }
+  // HTML overlay marker: a fixed-size badge that never shrinks with distance or renderer resolution
+  const cp = cheeseView.group.position;
+  _proj.set(cp.x, cp.y + 0.9, cp.z).project(v.cam);
   const behind = _proj.z > 1;
   let x = _proj.x, y = _proj.y;
-  if (!behind && Math.abs(x) < 0.92 && Math.abs(y) < 0.88) { a.style.display = 'none'; return; }
+  if (!behind && Math.abs(x) < 0.94 && Math.abs(y) < 0.9) {
+    a.style.display = 'none';
+    mk.style.display = 'block';
+    mk.style.left = ((x * 0.5 + 0.5) * 100) + '%'; mk.style.top = ((-y * 0.5 + 0.5) * 100) + '%';
+    const rv = game.racerViews.get(v.racerId);
+    const d = rv ? Math.hypot(rv.root.position.x - cp.x, rv.root.position.z - cp.z) : 0; // same measure as the HUD line
+    v.hud.markD.textContent = d > 6 ? `${d.toFixed(0)} m` : '';
+    mk.classList.toggle('near', d < 2.8);
+    return;
+  }
+  mk.style.display = 'none';
+  // off screen: arrow on the edge pointing at it
   if (behind) { x = -x; y = -Math.abs(y) - 1; }
   const m = Math.max(Math.abs(x) / 0.85, Math.abs(y) / 0.8);
   x /= m; y /= m;
@@ -495,7 +535,7 @@ const cheeseGlow = (() => {
 })();
 function updateCheeseGlow(t) {
   const on = !!game.mode && !cheeseHeld;
-  cheeseGlow.sp.visible = cheeseGlow.pin.visible = cheeseView.beam.visible = on;
+  cheeseGlow.sp.visible = cheeseView.beam.visible = on; cheeseGlow.pin.visible = false; // the bobbing marker is an HTML badge (updateCheeseArrow)
   if (!on) return;
   const p = cheeseView.group.position;
   const inReach = game.views.some((v) => { const rv = game.racerViews.get(v.racerId); return rv && rv.root.position.distanceTo(p) < 2.6; });
@@ -506,6 +546,7 @@ function updateCheeseGlow(t) {
   let dmin = 1e9; for (const v of game.views) if (v.camPos) dmin = Math.min(dmin, v.camPos.distanceTo(p));
   const far = Math.max(0, Math.min(1, (dmin - 8) / 22));
   cheeseView.beam.material.opacity = 0.18 + 0.72 * far;
+  { const w = Math.max(1, dmin / 45); cheeseView.beam.scale.set(w, 1 + Math.max(0, dmin - 60) / 120, w); } // stays a few pixels wide (and tall) far away
   cheeseGlow.sp.material.opacity = 0.35 + 0.65 * far;
   cheeseGlow.sp.position.copy(p); cheeseGlow.sp.scale.setScalar((1.8 + 1.8 * far) * pulse);
   cheeseGlow.pin.position.set(p.x, p.y + 1.2 + Math.sin(t * 4) * 0.25, p.z);
@@ -528,7 +569,7 @@ function maybeShowResults(result, racers, dt) {
   else title = result.how === 'cheese' ? `${result.name} caught the cheese` : `${result.name} won the race`;
   $('#res-title').textContent = title;
   $('#res-title').className = winnerLocal ? 'win' : 'lose';
-  $('#res-sub').textContent = (result.how === 'cheese' ? 'Cheese snatched' : result.how === 'finish' ? 'First across the line' : 'Time limit') + ` in ${fmtTime(result.time)}`;
+  $('#res-sub').textContent = (result.how === 'cheese' ? 'Cheese snatched' : result.how === 'finish' ? 'First across the line' : 'Time limit') + ` in ${fmtTime(result.time + Core.RELEASE_CD)}`;
   // gaps to the winner, in metres and (estimated at the winner's average pace) seconds
   const lead = sorted[0], avgV = Math.max(4, ((lead ? lead.z : 0) + 4) / Math.max(1, result.time));
   const M = game.mode !== 'online' ? game.match : null;
@@ -562,7 +603,7 @@ function maybeShowResults(result, racers, dt) {
   if (winnerLocal && game.mode !== 'online') {
     try { const best = parseFloat(localStorage.getItem('cc-best') || '0'); if (!best || result.time < best) localStorage.setItem('cc-best', String(result.time)); } catch (e) { /* storage may be unavailable */ }
   }
-  let best = ''; try { const b = localStorage.getItem('cc-best'); if (b) best = `Best winning time: ${fmtTime(parseFloat(b))}`; } catch (e) { }
+  let best = ''; try { const b = localStorage.getItem('cc-best'); if (b) best = `Best winning time: ${fmtTime(parseFloat(b) + Core.RELEASE_CD)}`; } catch (e) { }
   $('#res-best').textContent = best;
   const again = $('#btn-again');
   if (game.mode === 'online') { again.style.display = online.isHost ? '' : 'none'; $('#res-wait').style.display = online.isHost ? 'none' : ''; }
@@ -748,8 +789,9 @@ function updateOnline(dt) {
   const me = online.me;
   if (me && online.predicting && inp) {
     game.acc += dt; let n = 0;
-    while (game.acc >= Core.C.SUB && n < 8) { Core.stepRacer(game.race, me, Core.C.SUB, inp, true); game.acc -= Core.C.SUB; n++; }
-    if (n >= 8) game.acc = 0;
+    const maxN = Math.ceil(1.0 / Core.C.SUB) + 1;
+    while (game.acc >= Core.C.SUB && n < maxN) { Core.stepRacer(game.race, me, Core.C.SUB, inp, true); game.acc -= Core.C.SUB; n++; }
+    if (n >= maxN) game.acc = 0;
     game.race.events = [];
   }
   const summaries = [];
@@ -939,28 +981,70 @@ function resize() {
 }
 addEventListener('resize', resize);
 const clock = new THREE.Clock();
-// adaptive quality: drop resolution / shadow detail on slow GPUs (or force with ?quality=low)
-let quality = 2, fpsT0 = performance.now(), fpsN = 0, lowStreak = 0;
+// ---------------------------------------------------------------------------
+// graphics quality: 0 low / 1 medium / 2 high. "auto" picks from the GPU string and drops to LOW if the
+// frame rate stays under 25 fps for 2 s. ?quality=low|medium|high or the menu toggle force a level.
+// ---------------------------------------------------------------------------
+let quality = 2, fpsT0 = performance.now(), fpsN = 0, slowFor = 0;
+const QNAMES = ['Low', 'Medium', 'High'];
+function rendererString() {
+  try { const gl = renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); return String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); } catch (e) { return ''; }
+}
+const SOFTWARE_GPU = /swiftshader|llvmpipe|softpipe|software|basic render|mesa offscreen|lavapipe/i.test(rendererString());
 function setQuality(q) {
   quality = q;
-  renderer.setPixelRatio(q >= 2 ? Math.min(devicePixelRatio, 2) : q === 1 ? Math.min(devicePixelRatio, 1) : 0.6);
+  renderer.setPixelRatio(q >= 2 ? Math.min(devicePixelRatio, 2) : q === 1 ? Math.min(devicePixelRatio, 1) : Math.min(0.7, devicePixelRatio));
+  world.tufts.count = q >= 2 ? world.tuftsMax : q === 1 ? Math.floor(world.tuftsMax * 0.6) : Math.floor(world.tuftsMax * 0.25);
+  world.setDetail(q >= 2 ? 1 : q === 1 ? 0.7 : 0.4);
+  particles.density = q >= 2 ? 1 : q === 1 ? 0.7 : 0.35;
+  world.sun.castShadow = q > 0; // no shadows on low (three recompiles the lit materials by itself)
   const ms = q >= 2 ? 2048 : 1024;
-  world.tufts.count = q >= 2 ? world.tuftsMax : q === 1 ? Math.floor(world.tuftsMax * 0.6) : Math.floor(world.tuftsMax * 0.3);
   if (world.sun.shadow.mapSize.x !== ms) { world.sun.shadow.mapSize.set(ms, ms); if (world.sun.shadow.map) { world.sun.shadow.map.dispose(); world.sun.shadow.map = null; } }
   renderer.setSize(innerWidth, innerHeight);
   post.composer.setPixelRatio(renderer.getPixelRatio()); post.composer.setSize(innerWidth, innerHeight);
+  updateQualityButton();
 }
+// user setting: 'auto' | 0 | 1 | 2  (URL beats the saved menu choice)
+let qualityMode = 'auto';
+{
+  const map = { low: 0, medium: 1, med: 1, high: 2, auto: 'auto', 0: 0, 1: 1, 2: 2 };
+  const url = new URLSearchParams(location.search).get('quality');
+  let saved = null; try { saved = localStorage.getItem('cc-quality'); } catch (e) { }
+  const pick = url != null && url in map ? map[url] : saved != null && saved in map ? map[saved] : 'auto';
+  qualityMode = pick;
+}
+function updateQualityButton() {
+  const b = document.getElementById('btn-quality');
+  if (b) b.textContent = `Graphics: ${qualityMode === 'auto' ? `Auto (${QNAMES[quality]})` : QNAMES[quality]}`;
+}
+function applyQualityMode() { setQuality(qualityMode === 'auto' ? (SOFTWARE_GPU ? 0 : 2) : qualityMode); slowFor = 0; }
 if (new URLSearchParams(location.search).get('post') === '0') post.enabled = false;
-if (new URLSearchParams(location.search).get('quality') === 'low') setQuality(0);
+applyQualityMode();
+{
+  const b = document.getElementById('btn-quality');
+  if (b) b.onclick = () => {
+    const order = ['auto', 0, 1, 2]; qualityMode = order[(order.indexOf(qualityMode) + 1) % order.length];
+    try { localStorage.setItem('cc-quality', String(qualityMode)); } catch (e) { }
+    applyQualityMode();
+  };
+}
+window.__ccQuality = () => ({ quality, mode: qualityMode, software: SOFTWARE_GPU, renderer: rendererString() });
 function frame() {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.05, clock.getDelta());
+  // REAL elapsed time drives the game (countdown, race clock, physics). Only pauses over 1 s (tab switch, debugger)
+  // are clamped; the sim substeps internally so slow frames don't freeze or slow down the clock.
+  const dt = Math.min(1.0, clock.getDelta());
   const t = clock.elapsedTime;
   fpsN++;
   const nowMs = performance.now();
-  if (nowMs - fpsT0 > 2000) {
-    window.__cc.fps = fpsN * 1000 / (nowMs - fpsT0); fpsT0 = nowMs; fpsN = 0;
-    if (window.__cc.fps < 28 && quality > 0 && !document.hidden) { if (++lowStreak >= 2) { setQuality(quality - 1); lowStreak = 0; } } else lowStreak = 0;
+  if (nowMs - fpsT0 > 500) {
+    const span = (nowMs - fpsT0) / 1000;
+    window.__cc.fps = fpsN / span; fpsT0 = nowMs; fpsN = 0;
+    // auto mode: under 25 fps for 2 s straight => low quality
+    if (qualityMode === 'auto' && game.mode && !document.hidden && quality > 0) {
+      slowFor = window.__cc.fps < 25 ? slowFor + span : 0;
+      if (slowFor >= 2) { setQuality(0); slowFor = 0; }
+    }
   }
   try {
     if (game.mode === 'online') updateOnline(dt);
@@ -985,8 +1069,9 @@ function frame() {
         if (game.stepPh >= 1) { game.stepPh -= 1; audio.step(Math.min(1.5, 0.5 + sp / 14)); const p = rv.root.position; if (sp > 8) particles.kick(p.x, p.y, p.z, 0, 1, 2); }
       }
     }
+    for (const v of game.views) updateCamera(v, dt, phase);
+    fadeBlockers();
     for (const v of game.views) {
-      updateCamera(v, dt, phase);
       updateCheeseArrow(v);
       const vw = W / v.n, vx = v.idx * vw;
       v.cam.aspect = vw / H; v.cam.updateProjectionMatrix();
@@ -1014,7 +1099,7 @@ function frame() {
     if (game.screen === '#screen-select') renderPreviews(t);
   }
 }
-window.__cc = { game, online, Core, world, scene, fps: 0,
+window.__cc = { game, online, Core, world, scene, fps: 0, fadeBlockers,
   // test hook: line all characters up at the start for a screenshot
   lineup() {
     const views = [];

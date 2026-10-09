@@ -130,6 +130,7 @@ node tests/cheese.sim.mjs                               # cheese pacing: first c
 node tests/ragdoll.shots.js                             # tumble + roll-jump rig screenshots (SOLO=1 hides the AI)
 node tests/net.test.js https://<your-service>.onrender.com   # protocol test against a deployed server
 CHROME=/path/to/chrome npm run test:browser             # headless browser: menu, solo, roll-jump, results, next heat, split-screen
+node tests/realtime.browser.test.js                     # real-time clock on a slow software GPU, auto LOW quality, cheese marker/arrow
 node tests/feel.shots.js                                # camera/HUD screenshots (SOLO=1 hides the AI)
 node tests/online.browser.test.js http://localhost:8797 # two headless browsers race online
 ```
@@ -141,6 +142,15 @@ The lighting is warm late-morning sun with crisp soft shadows under a blue gradi
 clouds; the fog colour is matched to the horizon so distant land melts into the haze. With a single view at high quality, there's subtle
 post-processing: soft bloom, ACES tone mapping, a light colour grade, and SMAA. Every mode gets a CSS vignette
 (`?post=0` turns the post-processing off).
+
+### Graphics quality
+The **Graphics** button on the main menu cycles between Auto, Low, Medium and High, and your choice is saved. You can
+also force a level with `?quality=low|medium|high|auto`, which takes priority over the saved choice. Auto starts on
+**Low** when the browser reports a software renderer (SwiftShader, llvmpipe and similar). It also drops to Low if
+the game runs under 25 fps for 2 s. Low uses a pixel ratio of 0.7 or less, no shadows and no post-processing, with
+about 40% of the trees, crowd and rocks, a quarter of the grass and about a third of the particles.
+The game clock always follows real time. Slow frames are caught up in fixed 1/60 s physics substeps (up to 1 s per
+frame), so the countdown and race timer never stall. The race clock starts when the cheese is released.
 
 ### AI
 The bots steer at where the cheese *will* be (its position plus lead), and they race in a pack around you: each one
@@ -167,5 +177,4 @@ key press.
   screens. Ragdolls don't collide with each other or with the cheese.
 * Online: there's no account or persistence, rooms live in server memory, and prediction is soft blending rather
   than full input replay. On very high-latency connections your own runner may visibly correct after tumbles.
-* Split-screen renders the scene twice, so it needs a reasonable GPU. The game automatically lowers resolution
-  and shadow quality if the frame rate drops (`?quality=low` forces this).
+* Split-screen renders the scene twice, so it needs a reasonable GPU. See *Graphics quality* below.

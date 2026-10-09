@@ -85,6 +85,7 @@ export class Particles {
   }
   emit(x, y, z, vx, vy, vz, spread, color, size, life, count) {
     const c = new THREE.Color(color);
+    count = Math.max(1, Math.round(count * (this.density ?? 1)));
     for (let k = 0; k < count; k++) {
       const i = this.cursor; this.cursor = (this.cursor + 1) % this.max;
       this.pos[i * 3] = x + (Math.random() - 0.5) * 0.3; this.pos[i * 3 + 1] = y; this.pos[i * 3 + 2] = z + (Math.random() - 0.5) * 0.3;
@@ -105,6 +106,8 @@ export class Particles {
     this.emit(x, y + 0.05, z, vx * 0.3, 1.8, vz * 0.3, 2.0, 0x6b4a2b, 0.07, 0.8, Math.ceil(n * 0.6));
   }
   update(dt) {
+    // long frames (slow software renderers) are integrated in small steps so dirt doesn't fly off
+    if (dt > 0.05) { let left = dt; while (left > 1e-4) { const h = Math.min(0.05, left); this.update(h); left -= h; } return; }
     for (let i = 0; i < this.max; i++) {
       if (this.life[i] <= 0) continue;
       this.life[i] -= dt;
@@ -198,7 +201,9 @@ export function mudAmount(x, z) {
 // ---------- scene construction ----------
 export function buildWorld(scene, renderer) {
   const rnd = mulberry32(42);
-  const world = { update: null };
+  const world = { update: null, detail: [] };
+  // scenery density 0..1 (low quality thins trees, crowd, rocks; grass is handled by the caller)
+  world.setDetail = (f) => { for (const fn of world.detail) fn(f); };
   const dummy = new THREE.Object3D();
   const color = new THREE.Color();
 
@@ -362,7 +367,7 @@ export function buildWorld(scene, renderer) {
       dummy.updateMatrix(); rocks.setMatrixAt(n, dummy.matrix);
       color.setHSL(0.09, 0.08 + rnd() * 0.06, 0.5 + rnd() * 0.15); rocks.setColorAt(n, color); n++;
     }
-    rocks.count = n; rocks.castShadow = true; rocks.receiveShadow = true; scene.add(rocks);
+    rocks.count = n; { const nr = n; world.detail.push((f) => { rocks.count = Math.floor(nr * Math.max(0.5, f)); }); } rocks.castShadow = true; rocks.receiveShadow = true; scene.add(rocks);
   }
 
   // trees: mostly broadleaf English woodland, some conifers
@@ -379,7 +384,7 @@ export function buildWorld(scene, renderer) {
     const NR = 700, NP = 160;
     const mTrunk = new THREE.MeshStandardMaterial({ color: 0x5a4632, roughness: 0.95, flatShading: true });
     const mLeaf = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true });
-    const trunks = new THREE.InstancedMesh(trunkG, mTrunk, NR + NP);
+    const trunks = new THREE.InstancedMesh(trunkG, mTrunk, NP), trunksR = new THREE.InstancedMesh(trunkG, mTrunk, NR);
     const pines = new THREE.InstancedMesh(pineG, mLeaf, NP);
     const rounds = new THREE.InstancedMesh(roundG, mLeaf, NR), rounds2 = new THREE.InstancedMesh(round2G, mLeaf, NR);
     let ti = 0, pi = 0, ri = 0;
@@ -388,11 +393,12 @@ export function buildWorld(scene, renderer) {
         const side = rnd() < 0.5 ? -1 : 1;
         let x, z;
         if (rnd() < 0.8) { z = -100 + rnd() * (E + 120); x = side * ((z > -25 && z < E ? 39 : 28) + Math.pow(rnd(), 0.7) * 80); }
-        else { z = E + rnd() * 260; x = (rnd() * 2 - 1) * 140; if (Math.abs(x) < 30 && z < E + 30) continue; } // valley copses (skipped slots are simply not written)
+        else { z = E + rnd() * 260; x = (rnd() * 2 - 1) * 140; if (Math.abs(x) < 46 + (z - E) * 0.35) continue; } // valley copses, keeping a clear wedge straight down the course line (skipped slots are simply not written)
+        if (z > 200 && Math.abs(x) < 52 && rnd() < 0.6) continue; // thin the wall of trees that frames the lower course so the cheese line reads
         const s = 0.8 + rnd() * 0.9;
         dummy.position.set(x, height(x, z) - 0.2, z); dummy.rotation.set(0, rnd() * 6, 0); dummy.scale.set(s, s * (0.85 + rnd() * 0.4), s);
         dummy.updateMatrix();
-        trunks.setMatrixAt(ti++, dummy.matrix);
+        if (isPine) trunks.setMatrixAt(pi, dummy.matrix); else trunksR.setMatrixAt(ri, dummy.matrix); ti++;
         color.setHSL(isPine ? 0.36 + rnd() * 0.04 : 0.2 + rnd() * 0.08, isPine ? 0.35 + rnd() * 0.1 : 0.42 + rnd() * 0.18, isPine ? 0.2 + rnd() * 0.05 : 0.28 + rnd() * 0.1);
         if (isPine) { pines.setMatrixAt(pi, dummy.matrix); pines.setColorAt(pi, color); pi++; }
         else { rounds.setMatrixAt(ri, dummy.matrix); rounds.setColorAt(ri, color); color.offsetHSL(0, 0, 0.03); rounds2.setMatrixAt(ri, dummy.matrix); rounds2.setColorAt(ri, color); ri++; }
@@ -400,8 +406,9 @@ export function buildWorld(scene, renderer) {
     };
     place(NP, true); place(NR, false);
     // only draw the instances we actually wrote (unwritten ones are identity matrices at the origin = white blob on the start line)
-    trunks.count = ti; pines.count = pi; rounds.count = ri; rounds2.count = ri;
-    for (const m of [trunks, pines, rounds, rounds2]) { m.castShadow = true; m.receiveShadow = true; scene.add(m); }
+    trunks.count = pi; trunksR.count = ri; pines.count = pi; rounds.count = ri; rounds2.count = ri;
+    for (const m of [trunks, trunksR, pines, rounds, rounds2]) { m.castShadow = true; m.receiveShadow = true; scene.add(m); }
+    world.detail.push((f) => { const np = Math.floor(pi * f), nr = Math.floor(ri * f); trunks.count = pines.count = np; trunksR.count = rounds.count = rounds2.count = nr; });
   }
 
   // hedges: behind the spectators and as hedgerows between the valley fields
@@ -478,6 +485,8 @@ export function buildWorld(scene, renderer) {
       color.setHex(skins[(rnd() * skins.length) | 0]); heads.setColorAt(i, color);
     }
     umbs.count = ui;
+    const umbBefore = []; { let u = 0; for (let i = 0; i <= N; i++) { umbBefore.push(u); if (i < N && people[i].umb >= 0) u++; } }
+    world.detail.push((f) => { const n = Math.floor(N * f); bodies.count = heads.count = n; umbs.count = umbBefore[n]; });
     for (const m of [bodies, heads, umbs]) { m.castShadow = true; m.receiveShadow = true; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); }
     world.updateCrowd = (t, focusZ, excite) => {
       for (let i = 0; i < N; i++) {

@@ -222,6 +222,23 @@ export class RacerView {
       this.tag.position.set(_lv.x, _lv.y + 0.3 + 0.18 * this.m.H, _lv.z);
     }
   }
+  // see-through when this runner blocks a camera (materials are cloned per runner on first use)
+  setFade(alpha) {
+    alpha = Math.max(0.15, Math.min(1, alpha));
+    if (!this.fadeMats) {
+      if (alpha >= 0.99) return;
+      this.fadeMats = [];
+      const seen = new Map();
+      this.m.root.traverse((o) => {
+        if (!o.isMesh) return;
+        const one = (mt) => { if (!seen.has(mt)) { const c = mt.clone(); c.transparent = true; seen.set(mt, c); this.fadeMats.push(c); } return seen.get(mt); };
+        o.material = Array.isArray(o.material) ? o.material.map(one) : one(o.material);
+      });
+    }
+    if (this.fadeA !== undefined && Math.abs(this.fadeA - alpha) < 0.01) return;
+    this.fadeA = alpha;
+    for (const mt of this.fadeMats) { mt.opacity = alpha; mt.depthWrite = alpha > 0.95; }
+  }
   // small coloured place tag (gold/silver/bronze dot + name) shown over the top 3; rank 0 = hide
   setTag(rank, name) {
     if (!rank) { if (this.tag) this.tag.visible = false; return; }
