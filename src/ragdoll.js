@@ -7,7 +7,7 @@ import { height } from './core.js';
 export const J = { PELVIS: 0, CHEST: 1, HEAD: 2, SHL: 3, SHR: 4, ELL: 5, ELR: 6, HDL: 7, HDR: 8, HIPL: 9, HIPR: 10, KNL: 11, KNR: 12, FTL: 13, FTR: 14 };
 const N = 15;
 const RADII = [0.15, 0.16, 0.17, 0.08, 0.08, 0.06, 0.06, 0.06, 0.06, 0.09, 0.09, 0.07, 0.07, 0.06, 0.06];
-const INVM = [0.5, 0.5, 0.9, 0.8, 0.8, 1, 1, 1.2, 1.2, 0.7, 0.7, 1, 1, 1.2, 1.2];
+const INVM = [0.35, 0.4, 0.8, 0.7, 0.7, 1.3, 1.3, 1.7, 1.7, 0.55, 0.55, 1.0, 1.0, 1.4, 1.4];
 // rigid-ish torso: a braced box of pelvis/chest/shoulders/hips + head
 const STICKS = [
   [0, 1], [1, 2], [3, 4], [1, 3], [1, 4], [0, 3], [0, 4], [9, 10], [0, 9], [0, 10], [9, 1], [10, 1], [3, 9], [4, 10], [3, 10], [4, 9], [2, 3], [2, 4], [2, 0],
@@ -15,7 +15,7 @@ const STICKS = [
   [9, 11], [11, 13], [10, 12], [12, 14], // legs
 ];
 // joint limits (approximate): limbs can't fold completely flat
-const MINS = [[3, 7, 0.24], [4, 8, 0.24], [9, 13, 0.5], [10, 14, 0.5], [7, 2, 0.2], [8, 2, 0.2], [13, 0, 0.35], [14, 0, 0.35]];
+const MINS = [[3, 7, 0.3], [4, 8, 0.3], [9, 13, 0.58], [10, 14, 0.58], [7, 2, 0.22], [8, 2, 0.22], [13, 0, 0.45], [14, 0, 0.45], [13, 2, 0.6], [14, 2, 0.6], [11, 12, 0.14], [13, 14, 0.12], [5, 0, 0.3], [6, 0, 0.3], [11, 1, 0.45], [12, 1, 0.45]];
 // knees bend only backwards: keep the foot behind the line through hip->knee relative to torso forward (soft)
 const GRAV = -16;
 
@@ -42,6 +42,15 @@ export class Ragdoll {
     }
     this.active = true; this.acc = 0; this.t = 0;
   }
+  // add a velocity (+ optional spin about the centroid) to every particle, e.g. a roll-jump launch
+  addVelocity(vel, omega = [0, 0, 0], h = 1 / 120) {
+    const c = this.center();
+    for (let i = 0; i < N; i++) {
+      const k = i * 3, rx = this.p[k] - c[0], ry = this.p[k + 1] - c[1], rz = this.p[k + 2] - c[2];
+      const vx = vel[0] + omega[1] * rz - omega[2] * ry, vy = vel[1] + omega[2] * rx - omega[0] * rz, vz = vel[2] + omega[0] * ry - omega[1] * rx;
+      this.o[k] -= vx * h; this.o[k + 1] -= vy * h; this.o[k + 2] -= vz * h;
+    }
+  }
   get(i) { return [this.p[i * 3], this.p[i * 3 + 1], this.p[i * 3 + 2]]; }
   center() { const p = this.p; return [(p[0] + p[3]) / 2, (p[1] + p[4]) / 2, (p[2] + p[5]) / 2]; }
   // advance by dt (fixed internal 1/120 steps). tether: [x,y,z] the body centre should follow (or null)
@@ -65,7 +74,7 @@ export class Ragdoll {
     if (flail > 0) {
       const t = this.t * 9 + this.seed;
       for (const i of [7, 8, 13, 14]) {
-        const k = i * 3, a = flail * 0.0009;
+        const k = i * 3, a = flail * 0.0004;
         p[k] += Math.sin(t + i) * a; p[k + 1] += Math.cos(t * 1.3 + i) * a; p[k + 2] += Math.sin(t * 0.7 + i * 2) * a;
       }
     }
@@ -95,9 +104,11 @@ export class Ragdoll {
           const vy = p[k + 1] - o[k + 1];
           if (it === 0 && -vy / h > this.impact) this.impact = -vy / h;
           p[k + 1] = gh;
-          // friction on the turf + a little bounce
-          o[k] = p[k] - (p[k] - o[k]) * 0.82; o[k + 2] = p[k + 2] - (p[k + 2] - o[k + 2]) * 0.82;
-          if (vy < 0) o[k + 1] = p[k + 1] + vy * 0.2;
+          if (it === 0) {
+            // turf friction (once per substep) + a small thud-bounce
+            o[k] = p[k] - (p[k] - o[k]) * 0.93; o[k + 2] = p[k + 2] - (p[k + 2] - o[k + 2]) * 0.93;
+            if (vy < 0) o[k + 1] = p[k + 1] + vy * 0.25;
+          }
         }
       }
     }

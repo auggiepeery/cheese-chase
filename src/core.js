@@ -127,17 +127,19 @@ export function quatYXZ(yaw, pitch, roll) {
 }
 
 // ---------- cosmetic characters (no gameplay differences) ----------
+// Purely cosmetic runners. h = overall height scale, w = torso width (build). Colours: shirt (torso), sleeve (upper arm),
+// arms (forearm), shorts (pelvis + thigh), legs (shin), shoes. hair style, hat, and a list of accessory extras.
 export const CHARACTERS = [
-  { name: 'Farmhand Fern', shirt: 0x4f8a3c, shorts: 0x2f4f8a, skin: 0xf1c27d, hair: 0x8a5a2b, shoes: 0x3b2a1a, hat: 'flatcap', hatColor: 0x6b4a2b },
-  { name: 'Rugby Reg', shirt: 0xc0392b, stripe: 0xffffff, shorts: 0xf4f4f4, skin: 0xe0ac69, hair: 0x2b1d0e, shoes: 0x111111, hat: 'headband', hatColor: 0xffffff },
-  { name: 'Chef Brie', shirt: 0xf6f6f6, shorts: 0x333333, skin: 0x8d5524, hair: 0x1a1a1a, shoes: 0x222222, hat: 'chef', hatColor: 0xffffff },
-  { name: 'Viking Hilda', shirt: 0x7a5230, stripe: 0xc9a14a, shorts: 0x4a3520, skin: 0xffdbac, hair: 0xd35400, shoes: 0x3b2a1a, hat: 'viking', hatColor: 0x9aa0a6 },
-  { name: 'Constable Pat', shirt: 0x1d2a4a, shorts: 0x1d2a4a, skin: 0xc68642, hair: 0x2b1d0e, shoes: 0x0a0a0a, hat: 'bobby', hatColor: 0x111a33 },
-  { name: 'Moo-Suit Mo', shirt: 0xf2f2f2, stripe: 0x111111, shorts: 0x111111, skin: 0xf1c27d, hair: 0x5a3a1a, shoes: 0xf2f2f2, hat: 'cow', hatColor: 0xf2f2f2 },
-  { name: 'Lady Wensley', shirt: 0x8e44ad, shorts: 0x5b2c6f, skin: 0xffdbac, hair: 0xf0d58a, shoes: 0x5b2c6f, hat: 'widebrim', hatColor: 0xf1e2b5 },
-  { name: 'Captain Curd', shirt: 0xf1c40f, stripe: 0xc0392b, shorts: 0xc0392b, skin: 0xe0ac69, hair: 0x2b1d0e, shoes: 0xc0392b, hat: 'wedge', hatColor: 0xffc93c, cape: 0xc0392b },
-  { name: 'Dapper Dan', shirt: 0x2c3e50, stripe: 0xbdc3c7, shorts: 0x7f8c8d, skin: 0xffdbac, hair: 0x6e6e6e, shoes: 0x111111, hat: 'tophat', hatColor: 0x111111 },
-  { name: 'Beanie Bea', shirt: 0x16a085, shorts: 0x34495e, skin: 0x8d5524, hair: 0x1a1a1a, shoes: 0xe67e22, hat: 'beanie', hatColor: 0xe67e22 },
+  { name: 'Rugby Reg', h: 1.0, w: 1.32, skin: 0xe0ac69, shirt: 0xb8262b, hoops: 0xf4f4f4, sleeve: 0xb8262b, shorts: 0xf4f4f4, legs: 0xb8262b, shoes: 0x111111, hair: 0x2b1d0e, hairStyle: 'short', hat: 'headband', hatColor: 0xf4f4f4, extras: ['socks'] },
+  { name: 'Farmer Fern', h: 1.1, w: 0.9, skin: 0xffd9b8, shirt: 0xb03a2e, check: 0x5a1a14, sleeve: 0xb03a2e, shorts: 0x3d5a80, legs: 0x3d5a80, shoes: 0x2e6b2e, boots: 0x2e6b2e, hair: 0xc8642a, hairStyle: 'short', hat: 'flatcap', hatColor: 0x6b5a3a, extras: ['overalls', 'straw'] },
+  { name: 'Chef Brie', h: 0.95, w: 1.28, skin: 0x8d5524, shirt: 0xf8f8f8, sleeve: 0xf8f8f8, shorts: 0x444444, legs: 0x444444, shoes: 0x222222, hair: 0x1a1a1a, hairStyle: 'short', hat: 'chef', hatColor: 0xffffff, extras: ['belly', 'apron', 'mustache', 'buttons'] },
+  { name: 'Sir Cheddalot', h: 1.05, w: 1.18, skin: 0xffdbac, shirt: 0xb8bec6, sleeve: 0xb8bec6, arms: 0x9aa1aa, shorts: 0x9aa1aa, legs: 0xb8bec6, shoes: 0x6b7078, hair: 0x6b4a2b, hairStyle: 'none', hat: 'knight', hatColor: 0xb8bec6, extras: ['tabard'], tabard: 0x1f4e9a, metal: true },
+  { name: 'Captain Curd', h: 1.12, w: 1.25, skin: 0xe0ac69, shirt: 0x1f4fbf, sleeve: 0x1f4fbf, arms: 0x1f4fbf, shorts: 0xd62828, legs: 0x1f4fbf, shoes: 0xd62828, boots: 0xd62828, hair: 0x1a1a1a, hairStyle: 'quiff', hat: null, cape: 0xd62828, extras: ['mask', 'emblem', 'belt', 'shoulders'] },
+  { name: 'Granny Gwen', h: 0.82, w: 1.05, skin: 0xffe0c4, shirt: 0xd98cb3, sleeve: 0xd98cb3, arms: 0xd98cb3, shorts: 0x7a6650, legs: 0xe8cfb0, shoes: 0x4a3020, hair: 0xd8d8d8, hairStyle: 'bun', hat: null, extras: ['skirt', 'glasses', 'buttons', 'handbag', 'pearls'] },
+  { name: 'Moo-Suit Mo', h: 1.0, w: 1.15, skin: 0xf1c27d, shirt: 0xf4f4f4, sleeve: 0xf4f4f4, arms: 0xf4f4f4, shorts: 0xf4f4f4, legs: 0xf4f4f4, shoes: 0x1a1a1a, hair: 0x5a3a1a, hairStyle: 'none', hat: 'cowhood', hatColor: 0xf4f4f4, extras: ['spots', 'udder'] },
+  { name: 'Lycra Lexi', h: 1.12, w: 0.84, skin: 0x8d5524, shirt: 0x9dff00, stripe: 0xff2fa0, sleeve: 0xff2fa0, shorts: 0x161616, legs: 0x9dff00, shoes: 0xff2fa0, hair: 0x1a1a1a, hairStyle: 'ponytail', hat: 'sweatband', hatColor: 0xff2fa0, extras: ['sunglasses'] },
+  { name: 'Reverend Rupert', h: 1.15, w: 0.92, skin: 0xc68642, shirt: 0x151515, sleeve: 0x151515, arms: 0x151515, shorts: 0x151515, legs: 0x151515, shoes: 0x0a0a0a, hair: 0x9a9a9a, hairStyle: 'bald', hat: null, extras: ['robe', 'collar', 'glasses', 'cross'] },
+  { name: 'Punk Pete', h: 1.0, w: 0.95, skin: 0xffdbac, shirt: 0x1c1c1c, sleeve: 0x1c1c1c, shorts: 0x2d4f8a, legs: 0x2d4f8a, shoes: 0x3a1010, boots: 0x3a1010, hair: 0x39ff14, hairStyle: 'mohawk', hat: null, extras: ['studs', 'rips', 'chain'] },
 ];
 export const AI_NAMES = ['Bramble', 'Pip', 'Hattie', 'Big Tom', 'Moss', 'Dot', 'Wilf', 'Nell'];
 
@@ -265,7 +267,14 @@ export function addRacer(race, { id, name, char = 0, ai = null }) {
 }
 export function makeAI(race) {
   const q = race.rng;
-  return { rubber: 1, caution: 0.3 + q() * 0.5, aggro: 0.1 + q() * 0.6, sprinty: 0.3 + q() * 0.6, wander: 1 + q() * 3, wf: 0.3 + q() * 0.5, ph: q() * 6, react: 0.6 + q() * 0.35, laneX: (q() * 2 - 1) * 6, fwdHold: 1, sprintHold: 0 };
+  return { rubber: 1, pull: 0, pref: 3 + q() * 11, side: (q() * 2 - 1) * 5, caution: 0.3 + q() * 0.5, aggro: 0.1 + q() * 0.6, sprinty: 0.3 + q() * 0.6, wander: 1 + q() * 3, wf: 0.3 + q() * 0.5, ph: q() * 6, react: 0.6 + q() * 0.35, laneX: (q() * 2 - 1) * 6, fwdHold: 1, sprintHold: 0 };
+}
+// start grid: humans in the middle with the AI lined up either side of them
+export function gridOrder(race, rng = Math.random) {
+  const humans = race.racers.filter((r) => !r.ai), bots = race.racers.filter((r) => r.ai).sort(() => rng() - 0.5);
+  const half = Math.floor(bots.length / 2);
+  race.racers = [...bots.slice(0, half), ...humans, ...bots.slice(half)];
+  race.racers.forEach((r, i) => { r.idx = i; });
 }
 export function placeAtStart(race, r) {
   const n = Math.max(race.racers.length, 1);
@@ -330,10 +339,10 @@ export function stepRacer(race, r, dt, inp, predict = false) {
       if (sprint) { r.sprinting = true; r.stamina = Math.max(0, r.stamina - dt / SPRINT_TIME); if (r.stamina <= 0) r.sprintLock = true; }
       else if (!inp.s) r.stamina = Math.min(1, r.stamina + dt / 4);
       const power = (sprint ? SPRINT_POWER : POWER) * (r.ai ? r.ai.rubber : 1);
-      if (inp.f) az += power * slow;
-      if (inp.b && r.vz > 0) az -= 9;
-      ax += steer * 11;
-      if (!steer) ax -= r.vx * 3;
+      if (inp.f) az += power * slow + Math.max(0, 7 - r.vz) * 1.4 * slow; // quick get-away from low speed
+      if (inp.b && r.vz > 0) az -= 10;
+      // steering: chase a target sideways velocity (responsive, no ice-skating)
+      ax += (steer * 7.5 - r.vx) * (steer ? 7 : 5);
       ax -= K_DRAG * sp * r.vx; az -= K_DRAG * sp * r.vz;
       if (r.slowT > 0) { ax -= r.vx * 1.6; az -= r.vz * 1.6; }
       if (r.cleanT > 0) az += 3; // clean-landing boost
@@ -380,12 +389,12 @@ export function stepRacer(race, r, dt, inp, predict = false) {
         if (sp >= 5 && r.charges > 0 && r.airT < 0.3) { // ROLL-JUMP: launch toward the cheese
           r.spaceBuf = 0; r.charges--; r.chargeT = 0; r.rollJumps++;
           const tx = c.heldBy == null ? clamp((c.x - r.x) * 0.25, -3, 3) : 0;
-          r.vy = Math.max(r.vy, (hx * r.vx + hz * r.vz)) + 6.2; r.vz += 3.2; r.vx += tx + steer * 2;
+          r.vy = Math.max(r.vy, (hx * r.vx + hz * r.vz)) + 7; r.vz += 4; r.vx += tx + steer * 2;
           r.grounded = false; r.airT = 0.01;
           race.events.push({ e: 'rjump', id: r.id });
-        } else if (sp < 5) { r.spaceBuf = 0; r.state = ST.GETUP; r.st = 0; r.dur = 0.55; } // get up early
+        } else if (sp < 5) { r.spaceBuf = 0; r.state = ST.GETUP; r.st = 0; r.dur = 0.35; } // get up early
       }
-      if ((sp < 3 && r.st > 1.0) || (flat && sp < 6 && r.st > 2.5) || r.st > 9) { r.state = ST.GETUP; r.st = 0; r.dur = 0.7; }
+      if ((sp < 3 && r.st > 0.7) || (flat && sp < 6 && r.st > 2.5) || r.st > 9) { r.state = ST.GETUP; r.st = 0; r.dur = 0.45; }
       break;
     }
     case ST.GETUP:
@@ -397,6 +406,7 @@ export function stepRacer(race, r, dt, inp, predict = false) {
       fric(12); slope(0.2);
       break;
   }
+  if (r.ai && r.ai.pull && r.state !== ST.CELEBRATE && r.state !== ST.GETUP) az += r.ai.pull;
   r.vx += ax * dt; r.vz += az * dt;
   if (r.vz < -4) r.vz = -4;
   r.x += r.vx * dt; r.z += r.vz * dt;
@@ -434,7 +444,7 @@ export function stepRacer(race, r, dt, inp, predict = false) {
   if ((r.state === ST.RUN || r.state === ST.DIVE) && sp > 0.6) {
     let d = Math.atan2(r.vx, r.vz) - r.heading;
     d = Math.atan2(Math.sin(d), Math.cos(d));
-    r.heading += d * Math.min(1, dt * 8);
+    r.heading += d * Math.min(1, dt * 12);
   } else if (r.state === ST.CELEBRATE) {
     let d = Math.PI - r.heading; d = Math.atan2(Math.sin(d), Math.cos(d)); r.heading += d * Math.min(1, dt * 3);
   }
@@ -467,20 +477,31 @@ export function stepRacer(race, r, dt, inp, predict = false) {
 export function aiInput(race, r) {
   const a = r.ai, c = race.cheese, inp = r.aiInp, q = race.rng;
   if (race.phase === 'over') { inp.f = 0; inp.b = 1; inp.s = 0; inp.ax = 0; return inp; }
-  // rubber band: ease off when far ahead of the leading human, push when far behind
+  // stay in the pack around the leading human (so they're on screen): each bot hovers at its own gap,
+  // mostly a few metres ahead (between you and the cheese). Pulls are a gentle extra accel applied in stepRacer.
   let lead = null;
   for (const o of race.racers) if (!o.ai && (!lead || o.z > lead.z)) lead = o;
-  if (lead) { const gap = r.z - lead.z; a.rubber = gap > 15 ? 0.85 : gap < -15 ? 1.12 : 1; } else a.rubber = 1;
+  a.rubber = 1; a.pull = 0;
+  if (lead && race.phase === 'race') {
+    const gap = r.z - lead.z;
+    a.pull = clamp((a.pref - gap) * 0.6, gap > 22 ? -12 : -7, 9);
+    if (gap > a.pref + 4) a.rubber = 0.7; else if (gap < -3) a.rubber = 1.35;
+  }
   const canGrab = race.raceT > AI_GRAB_DELAY;
   const aheadCheese = c.released && c.heldBy == null && c.z > r.z - 2;
-  let targetX = aheadCheese ? c.x + Math.sin(race.t * a.wf + a.ph) * a.wander * clamp((c.z - r.z) / 30, 0, 1) : a.laneX;
+  // steer at where the cheese will be when we get there (position + lead), lightly blended toward the human's line
+  const spd = Math.max(6, Math.hypot(r.vx, r.vz));
+  const tLead = clamp((c.z - r.z) / spd, 0, 1.5);
+  let targetX = aheadCheese ? c.x + c.vx * tLead + Math.sin(race.t * a.wf + a.ph) * a.wander * 0.4 * clamp((c.z - r.z) / 30, 0, 1) : a.laneX;
+  if (lead && !(aheadCheese && c.z - r.z < 10)) targetX = targetX * 0.6 + (lead.x + a.side) * 0.4;
+  targetX = clamp(targetX, -14, 14);
   for (const o of race.racers) {
     if (o === r) continue;
     const dz = o.z - r.z;
     if (dz > 0 && dz < 3 && Math.abs(o.x - r.x) < 1.0 && a.aggro < 0.5) targetX += (r.x >= o.x ? 1.5 : -1.5);
   }
   const dx = targetX - r.x;
-  inp.ax = clamp((clamp(dx * 0.9, -6, 6) - r.vx) * 0.4, -1, 1);
+  inp.ax = clamp(clamp(dx * 1.1, -7, 7) / 7.5, -1, 1);
   if (Math.abs(inp.ax) < 0.08) inp.ax = 0;
   if (r.state === ST.TUMBLE) {
     // roll-jump toward the cheese sometimes; otherwise ride it out

@@ -30,6 +30,9 @@ for (let i = 0; i < (process.env.QUICK ? 3 : 6); i++) {
   if (i === 2) { await page.keyboard.press('Space'); await sleep(200); await page.keyboard.press('KeyE'); }
   await page.screenshot({ path: `shots/${tag}-4-run${i}.png` });
 }
+const popups = await page.evaluate(() => document.querySelectorAll('.hud-msg.show, .feed-item, .hud-hint.show').length);
+console.log('in-race popups visible:', popups);
+if (popups) { console.log('FAIL: popups are visible during the race'); process.exitCode = 1; }
 // roll-jump through the real keyboard path: knock the player over at speed, press Space mid-tumble
 const rj = await page.evaluate(async () => {
   const g = window.__cc.game, C = window.__cc.Core, me = g.race.racers.find((r) => r.id === 'p1');

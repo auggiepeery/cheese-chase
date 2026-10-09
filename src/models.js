@@ -13,66 +13,121 @@ function M(c, extra) {
 function add(parent, geo, mat, x = 0, y = 0, z = 0) {
   const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
 }
+// ---------- low-poly characters ----------
+// Every runner shares the same joint layout (so animation + ragdolls work for all), but builds, heights,
+// outfits, hair, hats and accessories differ so each one reads as a distinct silhouette.
 function addHat(head, ch) {
   const hc = M(ch.hatColor ?? 0x333333);
   switch (ch.hat) {
-    case 'flatcap': add(head, new THREE.CylinderGeometry(0.19, 0.19, 0.08, 10), hc, 0, 0.13, -0.01); add(head, new THREE.BoxGeometry(0.26, 0.03, 0.14), hc, 0, 0.11, 0.15).rotation.x = 0.15; break;
-    case 'headband': { const t = add(head, new THREE.TorusGeometry(0.168, 0.028, 6, 14), hc, 0, 0.06, 0); t.rotation.x = Math.PI / 2; break; }
-    case 'chef': add(head, new THREE.CylinderGeometry(0.16, 0.14, 0.14, 10), hc, 0, 0.17, 0); add(head, new THREE.IcosahedronGeometry(0.2, 1), hc, 0, 0.32, 0).scale.set(1, 0.75, 1); break;
-    case 'viking': {
-      add(head, new THREE.SphereGeometry(0.19, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), hc, 0, 0.03, 0);
-      for (const s of [-1, 1]) { const h = add(head, new THREE.ConeGeometry(0.045, 0.22, 6), M(0xf5ecd0), s * 0.2, 0.15, 0); h.rotation.z = -s * 0.9; }
+    case 'flatcap': add(head, new THREE.CylinderGeometry(0.19, 0.19, 0.08, 7), hc, 0, 0.13, -0.01); add(head, new THREE.BoxGeometry(0.26, 0.03, 0.14), hc, 0, 0.11, 0.15).rotation.x = 0.15; break;
+    case 'headband': { const t = add(head, new THREE.TorusGeometry(0.17, 0.03, 4, 8), hc, 0, 0.06, 0); t.rotation.x = Math.PI / 2; break; }
+    case 'sweatband': { const t = add(head, new THREE.TorusGeometry(0.172, 0.035, 4, 8), hc, 0, 0.07, 0); t.rotation.x = Math.PI / 2; break; }
+    case 'chef': add(head, new THREE.CylinderGeometry(0.17, 0.15, 0.26, 7), hc, 0, 0.22, 0); add(head, new THREE.IcosahedronGeometry(0.22, 0), hc, 0, 0.42, 0).scale.set(1, 0.7, 1); break;
+    case 'knight': {
+      add(head, new THREE.CylinderGeometry(0.2, 0.21, 0.36, 8), M(ch.hatColor, { metalness: 0.6, roughness: 0.35 }), 0, 0.03, 0);
+      add(head, new THREE.BoxGeometry(0.3, 0.035, 0.05), M(0x111111), 0, 0.04, 0.19);           // visor slit
+      add(head, new THREE.BoxGeometry(0.03, 0.12, 0.05), M(0x111111), 0, -0.05, 0.19);
+      const pl = add(head, new THREE.ConeGeometry(0.07, 0.42, 5), M(0xd62828), 0, 0.35, -0.08); pl.rotation.x = -0.6; // plume
       break;
     }
-    case 'bobby': add(head, new THREE.CylinderGeometry(0.12, 0.19, 0.3, 10), hc, 0, 0.2, 0); add(head, new THREE.IcosahedronGeometry(0.035, 0), M(0xd4af37, { metalness: 0.8, roughness: 0.3 }), 0, 0.22, 0.155); add(head, new THREE.SphereGeometry(0.05, 6, 4), hc, 0, 0.36, 0); break;
-    case 'cow':
-      for (const s of [-1, 1]) { const h = add(head, new THREE.ConeGeometry(0.035, 0.14, 6), M(0xf5ecd0), s * 0.11, 0.2, 0); h.rotation.z = -s * 0.4; const e = add(head, new THREE.BoxGeometry(0.12, 0.05, 0.06), M(0x111111), s * 0.2, 0.08, 0); e.rotation.z = s * 0.4; }
-      add(head, new THREE.SphereGeometry(0.185, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2.2), M(0x111111), 0, 0.02, -0.01);
+    case 'cowhood': {
+      add(head, new THREE.IcosahedronGeometry(0.205, 0), M(0xf4f4f4), 0, 0.03, -0.03).scale.set(1, 1, 1.05);
+      add(head, new THREE.BoxGeometry(0.2, 0.14, 0.04), M(0xf1c27d), 0, -0.01, 0.165); // face opening
+      for (const s of [-1, 1]) {
+        const h = add(head, new THREE.ConeGeometry(0.04, 0.16, 5), M(0xf5ecd0), s * 0.12, 0.22, 0); h.rotation.z = -s * 0.5;
+        const e = add(head, new THREE.BoxGeometry(0.14, 0.05, 0.07), M(0x1a1a1a), s * 0.23, 0.08, 0); e.rotation.z = s * 0.5;
+      }
+      add(head, new THREE.BoxGeometry(0.16, 0.08, 0.06), M(0xf2a5b5), 0, -0.1, 0.2); // muzzle
       break;
-    case 'widebrim': add(head, new THREE.CylinderGeometry(0.36, 0.36, 0.02, 14), hc, 0, 0.1, 0); add(head, new THREE.CylinderGeometry(0.15, 0.18, 0.15, 12), hc, 0, 0.18, 0); add(head, new THREE.IcosahedronGeometry(0.055, 0), M(0xe74c3c), 0.14, 0.2, 0.08); break;
-    case 'wedge': { const w = add(head, new THREE.CylinderGeometry(0.34, 0.34, 0.16, 3, 1, false, 0, Math.PI / 2.5), hc, 0, 0.17, 0); w.rotation.y = Math.PI * 0.8; break; }
-    case 'tophat': add(head, new THREE.CylinderGeometry(0.27, 0.27, 0.02, 14), hc, 0, 0.12, 0); add(head, new THREE.CylinderGeometry(0.15, 0.15, 0.32, 14), hc, 0, 0.28, 0); add(head, new THREE.CylinderGeometry(0.152, 0.152, 0.05, 14), M(0xc0392b), 0, 0.16, 0); break;
-    case 'beanie': add(head, new THREE.SphereGeometry(0.19, 10, 6, 0, Math.PI * 2, 0, Math.PI / 1.9), hc, 0, 0.03, 0); add(head, new THREE.IcosahedronGeometry(0.06, 1), M(0xffffff), 0, 0.23, 0); break;
+    }
   }
 }
-
+function addHair(head, ch) {
+  const hm = M(ch.hair);
+  switch (ch.hairStyle) {
+    case 'short': add(head, new THREE.SphereGeometry(0.182, 7, 4, 0, Math.PI * 2, 0, Math.PI * 0.45), hm, 0, 0.012, -0.02).rotation.x = -0.35; break;
+    case 'quiff': add(head, new THREE.SphereGeometry(0.182, 7, 4, 0, Math.PI * 2, 0, Math.PI * 0.42), hm, 0, 0.01, -0.02).rotation.x = -0.3; add(head, new THREE.IcosahedronGeometry(0.09, 0), hm, 0, 0.17, 0.09).scale.set(1.4, 0.8, 1); break;
+    case 'bun': add(head, new THREE.SphereGeometry(0.185, 7, 4, 0, Math.PI * 2, 0, Math.PI * 0.5), hm, 0, 0.01, -0.02).rotation.x = -0.25; add(head, new THREE.IcosahedronGeometry(0.1, 0), hm, 0, 0.17, -0.12); break;
+    case 'ponytail': add(head, new THREE.SphereGeometry(0.182, 7, 4, 0, Math.PI * 2, 0, Math.PI * 0.45), hm, 0, 0.012, -0.02).rotation.x = -0.35; { const pt = add(head, new THREE.ConeGeometry(0.07, 0.34, 5), hm, 0, -0.02, -0.24); pt.rotation.x = -2.6; } break;
+    case 'bald': for (const s of [-1, 1]) add(head, new THREE.BoxGeometry(0.05, 0.08, 0.16), hm, s * 0.165, -0.0, -0.04); break;
+    case 'mohawk':
+      for (let i = 0; i < 5; i++) { const c = add(head, new THREE.ConeGeometry(0.045, 0.26 - Math.abs(i - 1.5) * 0.03, 4), M(i % 2 ? 0xff2fa0 : ch.hair), 0, 0.2, 0.12 - i * 0.07); c.rotation.x = -0.3 - i * 0.15; }
+      break;
+  }
+}
 export function buildRunner(charIdx) {
   const ch = CHARACTERS[((charIdx % CHARACTERS.length) + CHARACTERS.length) % CHARACTERS.length];
+  const ex = new Set(ch.extras || []);
+  const W = ch.w || 1, H = ch.h || 1;
   const root = new THREE.Group();
-  const body = new THREE.Group(); body.position.y = 0.95; root.add(body);
-  const skin = M(ch.skin), shirt = M(ch.shirt), shorts = M(ch.shorts), shoe = M(ch.shoes ?? 0x222222), hair = M(ch.hair);
-  add(body, new THREE.BoxGeometry(0.38, 0.22, 0.25), shorts, 0, 0.02, 0);
-  add(body, new THREE.CylinderGeometry(0.21, 0.18, 0.56, 7), shirt, 0, 0.38, 0);
-  if (ch.stripe) { add(body, new THREE.CylinderGeometry(0.216, 0.2, 0.1, 7), M(ch.stripe), 0, 0.42, 0); add(body, new THREE.CylinderGeometry(0.2, 0.19, 0.08, 7), M(ch.stripe), 0, 0.2, 0); }
-  if (ch.hat === 'cow') for (const [x, y, z] of [[0.12, 0.45, 0.17], [-0.1, 0.3, -0.18], [0.15, 0.25, -0.1]]) add(body, new THREE.IcosahedronGeometry(0.07, 0), M(0x111111), x, y, z).scale.set(1, 1, 0.4);
+  const scaler = new THREE.Group(); scaler.scale.setScalar(H); root.add(scaler);
+  const body = new THREE.Group(); body.position.y = 0.95; scaler.add(body);
+  const metal = ch.metal ? { metalness: 0.55, roughness: 0.4 } : undefined;
+  const skin = M(ch.skin), shirt = M(ch.shirt, metal), shorts = M(ch.shorts, metal), shoe = M(ch.shoes ?? 0x222222, metal);
+  const sleeve = M(ch.sleeve ?? ch.shirt, metal), arms = M(ch.arms ?? ch.skin, metal), legs = M(ch.legs ?? ch.skin, metal);
+  // torso (scaled for build, so limbs don't shear)
+  const torso = new THREE.Group(); torso.scale.set(W, 1, 0.75 + W * 0.25); body.add(torso);
+  add(torso, new THREE.CylinderGeometry(0.2, 0.18, 0.24, 6), shorts, 0, 0.02, 0);
+  add(torso, new THREE.CylinderGeometry(0.22, 0.18, 0.56, 6), shirt, 0, 0.38, 0);
+  if (ch.hoops) for (const y of [0.24, 0.4, 0.56]) add(torso, new THREE.CylinderGeometry(0.218 + (y - 0.38) * 0.07, 0.212 + (y - 0.38) * 0.07, 0.07, 6), M(ch.hoops), 0, y, 0);
+  if (ch.stripe) for (const s of [-1, 1]) add(torso, new THREE.BoxGeometry(0.05, 0.56, 0.42), M(ch.stripe), s * 0.17, 0.38, 0);
+  if (ch.check) for (const y of [0.2, 0.36, 0.52]) add(torso, new THREE.CylinderGeometry(0.222, 0.215, 0.035, 6), M(ch.check), 0, y, 0);
+  if (ex.has('belly')) add(torso, new THREE.IcosahedronGeometry(0.2, 0), shirt, 0, 0.24, 0.1).scale.set(1, 0.95, 0.9);
+  if (ex.has('overalls')) { add(torso, new THREE.BoxGeometry(0.28, 0.3, 0.06), shorts, 0, 0.3, 0.16); for (const s of [-1, 1]) add(torso, new THREE.BoxGeometry(0.04, 0.3, 0.42), shorts, s * 0.1, 0.48, 0); }
+  if (ex.has('apron')) { add(torso, new THREE.BoxGeometry(0.34, 0.75, 0.03), M(0xffffff), 0, 0.05, 0.2).rotation.x = -0.06; add(torso, new THREE.BoxGeometry(0.36, 0.04, 0.44), M(0xffffff), 0, 0.28, 0); }
+  if (ex.has('buttons')) for (const y of [0.22, 0.34, 0.46, 0.58]) add(torso, new THREE.BoxGeometry(0.035, 0.035, 0.02), M(ch.name.startsWith('Chef') ? 0x333333 : 0xf5f5dc), 0, y, ex.has('belly') ? 0.27 : 0.205);
+  if (ex.has('tabard')) { add(torso, new THREE.BoxGeometry(0.3, 0.8, 0.03), M(ch.tabard), 0, 0.22, 0.2); add(torso, new THREE.BoxGeometry(0.3, 0.8, 0.03), M(ch.tabard), 0, 0.22, -0.2); add(torso, new THREE.BoxGeometry(0.06, 0.32, 0.035), M(0xffd34d), 0, 0.38, 0.215); add(torso, new THREE.BoxGeometry(0.22, 0.06, 0.035), M(0xffd34d), 0, 0.42, 0.215); }
+  if (ex.has('emblem')) { const e = add(torso, new THREE.CylinderGeometry(0.1, 0.1, 0.03, 3), M(0xffd34d), 0, 0.42, 0.2); e.rotation.x = Math.PI / 2; e.rotation.y = Math.PI; }
+  if (ex.has('belt')) add(torso, new THREE.CylinderGeometry(0.205, 0.2, 0.06, 6), M(0xffd34d), 0, 0.13, 0);
+  if (ex.has('shoulders')) for (const s of [-1, 1]) add(torso, new THREE.IcosahedronGeometry(0.12, 0), shirt, s * 0.22, 0.6, 0);
+  if (ex.has('skirt')) add(torso, new THREE.CylinderGeometry(0.2, 0.3, 0.46, 7, 1, true), shorts, 0, -0.18, 0).material = M(ch.shorts, { side: THREE.DoubleSide });
+  if (ex.has('robe')) add(torso, new THREE.CylinderGeometry(0.2, 0.32, 0.75, 7, 1, true), M(ch.shirt, { side: THREE.DoubleSide }), 0, -0.33, 0);
+  if (ex.has('collar')) { const c = add(torso, new THREE.CylinderGeometry(0.1, 0.1, 0.05, 7), M(0xffffff), 0, 0.68, 0); void c; }
+  if (ex.has('cross')) { add(torso, new THREE.BoxGeometry(0.03, 0.12, 0.02), M(0xd4af37, { metalness: 0.8, roughness: 0.3 }), 0, 0.4, 0.2); add(torso, new THREE.BoxGeometry(0.08, 0.03, 0.02), M(0xd4af37, { metalness: 0.8, roughness: 0.3 }), 0, 0.42, 0.2); }
+  if (ex.has('pearls')) { const t = add(torso, new THREE.TorusGeometry(0.12, 0.022, 4, 10), M(0xfdf8ec), 0, 0.62, 0.04); t.rotation.x = Math.PI / 2 - 0.4; }
+  if (ex.has('studs')) for (let i = 0; i < 8; i++) { const a = -0.9 + i * 0.26; add(torso, new THREE.OctahedronGeometry(0.025, 0), M(0xdddddd, { metalness: 0.9, roughness: 0.2 }), Math.sin(a) * 0.2, 0.6, Math.cos(a) * 0.2 * (i % 2 ? 1 : -1)); }
+  if (ex.has('chain')) { const t = add(torso, new THREE.TorusGeometry(0.12, 0.012, 3, 10, Math.PI), M(0xcccccc, { metalness: 0.9, roughness: 0.3 }), 0.1, 0.02, 0.17); t.rotation.z = Math.PI; }
+  if (ex.has('udder')) add(torso, new THREE.IcosahedronGeometry(0.07, 0), M(0xf2a5b5), 0, 0.08, 0.19);
+  if (ex.has('spots')) for (const [x, y, z] of [[0.12, 0.45, 0.17], [-0.1, 0.3, -0.18], [0.15, 0.22, -0.12], [-0.14, 0.5, 0.12]]) add(torso, new THREE.IcosahedronGeometry(0.08, 0), M(0x111111), x, y, z).scale.set(1, 1, 0.35);
   const chest = new THREE.Object3D(); chest.position.y = 0.6; body.add(chest);
   const neck = new THREE.Group(); neck.position.y = 0.68; body.add(neck);
   const head = new THREE.Group(); head.position.y = 0.15; neck.add(head);
   add(head, new THREE.IcosahedronGeometry(0.17, 1), skin);
-  add(head, new THREE.SphereGeometry(0.178, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.45), hair, 0, 0.012, -0.02).rotation.x = -0.35;
-  for (const s of [-1, 1]) add(head, new THREE.BoxGeometry(0.035, 0.05, 0.02), M(0x111111), s * 0.06, 0.0, 0.16);
-  add(head, new THREE.BoxGeometry(0.03, 0.04, 0.05), skin, 0, -0.02, 0.17);
+  addHair(head, ch);
+  if (ch.hat !== 'knight') {
+    for (const s of [-1, 1]) add(head, new THREE.BoxGeometry(0.035, 0.05, 0.02), M(0x111111), s * 0.06, 0.0, 0.16);
+    add(head, new THREE.ConeGeometry(0.03, 0.06, 4), skin, 0, -0.02, 0.18).rotation.x = Math.PI / 2;
+  }
+  if (ex.has('glasses')) for (const s of [-1, 1]) add(head, new THREE.TorusGeometry(0.04, 0.009, 3, 8), M(0x222222), s * 0.065, 0.0, 0.17);
+  if (ex.has('sunglasses')) add(head, new THREE.BoxGeometry(0.24, 0.05, 0.03), M(0x111111, { metalness: 0.5, roughness: 0.2 }), 0, 0.01, 0.165);
+  if (ex.has('mask')) add(head, new THREE.BoxGeometry(0.3, 0.06, 0.2), M(0x111111), 0, 0.01, 0.07);
+  if (ex.has('mustache')) add(head, new THREE.BoxGeometry(0.14, 0.03, 0.03), M(0x1a1a1a), 0, -0.065, 0.165);
+  if (ex.has('straw')) { const st = add(head, new THREE.CylinderGeometry(0.006, 0.006, 0.18, 3), M(0xe8d27a), 0.06, -0.09, 0.22); st.rotation.set(1.3, 0, 0.6); }
   addHat(head, ch);
   let cape = null;
-  if (ch.cape) { cape = new THREE.Group(); cape.position.set(0, 0.62, -0.17); body.add(cape); const cm = add(cape, new THREE.BoxGeometry(0.4, 0.62, 0.02), M(ch.cape), 0, -0.31, 0); cm.castShadow = true; }
+  if (ch.cape) { cape = new THREE.Group(); cape.position.set(0, 0.62, -0.17 * (0.75 + W * 0.25)); body.add(cape); add(cape, new THREE.BoxGeometry(0.46 * W, 0.78, 0.02), M(ch.cape), 0, -0.39, 0); }
   const limbs = {};
   for (const s of [-1, 1]) {
     const side = s < 0 ? 'R' : 'L';
-    const sh = new THREE.Group(); sh.position.set(s * 0.27, 0.6, 0); body.add(sh);
-    add(sh, new THREE.CapsuleGeometry(0.058, 0.24, 2, 6), shirt, 0, -0.15, 0);
+    const sh = new THREE.Group(); sh.position.set(s * (0.07 + 0.2 * W), 0.6, 0); body.add(sh);
+    add(sh, new THREE.CapsuleGeometry(0.06 * (0.6 + 0.4 * W), 0.24, 1, 5), sleeve, 0, -0.15, 0);
     const el = new THREE.Group(); el.position.y = -0.32; sh.add(el);
-    add(el, new THREE.CapsuleGeometry(0.05, 0.22, 2, 6), skin, 0, -0.13, 0);
-    add(el, new THREE.IcosahedronGeometry(0.06, 0), skin, 0, -0.29, 0);
+    add(el, new THREE.CapsuleGeometry(0.052, 0.22, 1, 5), arms, 0, -0.13, 0);
+    add(el, new THREE.IcosahedronGeometry(0.062, 0), ch.metal ? M(0x6b7078, metal) : (ex.has('spots') ? M(0x1a1a1a) : skin), 0, -0.29, 0);
+    if (ex.has('handbag') && s > 0) { add(el, new THREE.BoxGeometry(0.16, 0.13, 0.07), M(0x6b2c3a), 0, -0.36, 0.06); }
     const hand = new THREE.Object3D(); hand.position.y = -0.3; el.add(hand); limbs['hd' + side] = hand;
-    const hip = new THREE.Group(); hip.position.set(s * 0.11, -0.04, 0); body.add(hip);
-    add(hip, new THREE.CapsuleGeometry(0.078, 0.28, 2, 6), shorts, 0, -0.2, 0);
+    const hip = new THREE.Group(); hip.position.set(s * 0.11 * (0.7 + 0.3 * W), -0.04, 0); body.add(hip);
+    add(hip, new THREE.CapsuleGeometry(0.08 * (0.75 + 0.25 * W), 0.28, 1, 5), shorts, 0, -0.2, 0);
+    if (ex.has('rips')) add(hip, new THREE.BoxGeometry(0.07, 0.05, 0.02), skin, 0, -0.32, 0.08);
     const kn = new THREE.Group(); kn.position.y = -0.44; hip.add(kn);
-    add(kn, new THREE.CapsuleGeometry(0.066, 0.28, 2, 6), skin, 0, -0.2, 0);
-    add(kn, new THREE.BoxGeometry(0.12, 0.08, 0.25), shoe, 0, -0.43, 0.05);
+    add(kn, new THREE.CapsuleGeometry(0.066, 0.28, 1, 5), legs, 0, -0.2, 0);
+    if (ex.has('socks')) add(kn, new THREE.CylinderGeometry(0.072, 0.07, 0.06, 6), M(0xf4f4f4), 0, -0.22, 0);
+    if (ch.boots) add(kn, new THREE.CylinderGeometry(0.085, 0.08, 0.3, 6), M(ch.boots, metal), 0, -0.3, 0);
+    add(kn, new THREE.BoxGeometry(0.13, 0.09, 0.27), shoe, 0, -0.43, 0.05);
     const foot = new THREE.Object3D(); foot.position.set(0, -0.44, 0.03); kn.add(foot); limbs['ft' + side] = foot;
     limbs['sh' + side] = sh; limbs['el' + side] = el; limbs['hip' + side] = hip; limbs['kn' + side] = kn;
   }
-  return { root, body, neck, head, cape, limbs, ch, chest };
+  return { root, scaler, H, body, neck, head, cape, limbs, ch, chest };
 }
 
 const tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler();
@@ -120,7 +175,7 @@ export class RacerView {
     const rd = this.rd, m = this.m, g = this.groups();
     const P = (i) => _v.set(rd.p[i * 3], rd.p[i * 3 + 1], rd.p[i * 3 + 2]);
     const pel = P(J.PELVIS).clone();
-    this.root.position.set(pel.x, pel.y - 0.95, pel.z);
+    this.root.position.set(pel.x, pel.y - 0.95 * m.H, pel.z);
     this.root.quaternion.identity();
     m.body.position.set(0, 0.95, 0);
     _y.copy(P(J.CHEST)).sub(pel).normalize();
@@ -183,8 +238,10 @@ export class RacerView {
         break;
       }
       case ST.RUN: {
-        const amp = Math.min(1, 0.25 + sp / 9);
-        this.phase += dt * (3 + sp * 0.95);
+        // cadence follows ground speed (stride lengthens as you go faster) so feet don't skate
+        const amp = Math.min(1, 0.3 + sp / 8);
+        const stride = (1.0 + Math.min(1.1, sp * 0.07)) * (m.H || 1);
+        this.phase += dt * Math.max(4, Math.PI * sp / stride);
         const p = this.phase;
         tgt.hipL = -Math.sin(p) * 0.95 * amp; tgt.hipR = Math.sin(p) * 0.95 * amp;
         tgt.knL = 0.25 + Math.max(0, Math.sin(p + 1.4)) * 1.35 * amp; tgt.knR = 0.25 + Math.max(0, Math.sin(p + 1.4 + Math.PI)) * 1.35 * amp;
@@ -197,7 +254,7 @@ export class RacerView {
         if (s.flags & 4) roll += Math.sin(this.t * 20) * 0.2;
         // footsteps kick turf
         if (particles && sp > 4 && s.grounded) {
-          this.stepAcc += dt * (3 + sp * 0.95) / Math.PI;
+          this.stepAcc += dt * Math.max(4, Math.PI * sp / ((1.0 + Math.min(1.1, sp * 0.07)) * (m.H || 1))) / Math.PI;
           if (this.stepAcc > 1) { this.stepAcc = 0; particles.kick(s.x, s.y, s.z, s.vx, s.vz, sp * 0.35); }
         }
         break;
@@ -216,7 +273,7 @@ export class RacerView {
         break;
       }
       case ST.GETUP: {
-        const f = Math.min(1, (s.st || 0) / 0.8);
+        const f = Math.min(1, (s.st || 0) / 0.45);
         pitch = 0.5 * (1 - f) + 0.1; bodyY = 0.7 + 0.25 * f;
         tgt.hipL = -1.1 * (1 - f); tgt.knL = 1.5 * (1 - f) + 0.2; tgt.hipR = -0.4 * (1 - f); tgt.knR = 0.8 * (1 - f) + 0.2;
         tgt.shL = 0.5 * (1 - f); tgt.shR = 0.5 * (1 - f); tgt.elL = tgt.elR = -0.6; tgt.shZL = 0.3; tgt.shZR = -0.3;
@@ -247,7 +304,7 @@ export class RacerView {
     if (this.blend) {
       const B = this.blend;
       B.t += dt;
-      const f = Math.min(1, B.t / 0.75), e = f * f * (3 - 2 * f);
+      const f = Math.min(1, B.t / 0.4), e = f * f * (3 - 2 * f);
       if (f >= 1) { this.blend = null; return; }
       const g = this.groups();
       for (const k in g) { _qa.copy(g[k].quaternion); g[k].quaternion.copy(B.q[k]).slerp(_qa, e); }
@@ -255,6 +312,12 @@ export class RacerView {
       this.root.position.lerpVectors(B.rootPos, _v.copy(this.root.position), e);
       b.position.lerpVectors(B.bodyPos, _v.copy(b.position), e);
     }
+  }
+  // punchy impulse to the ragdoll (roll-jump launch): up/forward plus a forward flip
+  kick(vx, vy, vz) {
+    if (!this.rd.active) return;
+    const sp = Math.hypot(vx, vz) || 1;
+    this.rd.addVelocity([vx, vy, vz], [vz / sp * 7, 0, -vx / sp * 7]);
   }
   dispose(scene) { scene.remove(this.root); }
 }
@@ -281,8 +344,8 @@ function cheeseTextures() {
 export class CheeseView {
   constructor(scene) {
     const { face, rind } = cheeseTextures();
-    const geo = new THREE.CylinderGeometry(0.5, 0.5, 0.34, 36, 1);
-    const mats = [new THREE.MeshStandardMaterial({ map: rind, roughness: 0.55 }), new THREE.MeshStandardMaterial({ map: face, roughness: 0.6 }), new THREE.MeshStandardMaterial({ map: face, roughness: 0.6 })];
+    const geo = new THREE.CylinderGeometry(0.5, 0.5, 0.34, 14, 1);
+    const mats = [new THREE.MeshStandardMaterial({ map: rind, roughness: 0.55, flatShading: true }), new THREE.MeshStandardMaterial({ map: face, roughness: 0.6, flatShading: true }), new THREE.MeshStandardMaterial({ map: face, roughness: 0.6, flatShading: true })];
     const mesh = new THREE.Mesh(geo, mats); mesh.rotation.z = Math.PI / 2; mesh.castShadow = true; mesh.receiveShadow = true;
     this.group = new THREE.Group();
     this.group.add(mesh);

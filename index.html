@@ -84,7 +84,8 @@
   .hud-hint { position:absolute; bottom: 22%; left:0; right:0; text-align:center; font-size: 22px; font-weight: 900; opacity:0; transition: opacity .15s; }
   .hud-hint.show { opacity: 1; } .hud-hint.hot { color: var(--gold); font-size: 30px; animation: pulse .4s infinite alternate; }
   @keyframes pulse { to { transform: scale(1.08); } }
-  #countdown { position:fixed; left:0; right:0; top: 38%; text-align:center; font-size: 120px; font-weight: 900; color: var(--gold); text-shadow: 0 6px 0 #b35f12, 0 10px 30px rgba(0,0,0,0.5); opacity:0; pointer-events:none; z-index: 6; }
+  #vignette { position:fixed; inset:0; pointer-events:none; z-index: 1; background: radial-gradient(ellipse at 50% 48%, rgba(0,0,0,0) 55%, rgba(30,20,10,0.32) 100%); }
+  #countdown { position:fixed; left:0; right:0; top: 30%; text-align:center; font-size: 76px; font-weight: 900; color: var(--gold); text-shadow: 0 6px 0 #b35f12, 0 10px 30px rgba(0,0,0,0.5); opacity:0; pointer-events:none; z-index: 6; }
   #countdown.show { opacity:1; }
   #progress { position:fixed; left: 8px; top: 18%; height: 60%; width: 8px; background: rgba(255,255,255,0.35); border-radius: 4px; z-index: 6; display:none; }
   body.racing #progress { display:block; }
@@ -106,6 +107,7 @@
 <canvas id="c"></canvas>
 <div id="vignette"></div>
 <div id="huds"></div>
+<div id="vignette"></div>
 <div id="countdown"></div>
 <div id="progress"></div>
 <div id="feed"></div>

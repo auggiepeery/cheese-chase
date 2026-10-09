@@ -7,8 +7,13 @@ throws themselves down after it. Inspired by the traditional cheese-rolling race
 * **Solo vs AI**: you against 5 AI racers. Works fully offline.
 * **Local 2-player split-screen**: two players on one keyboard plus 4 AI. Works fully offline.
 * **Online multiplayer**: rooms with 4-letter codes, up to 8 humans plus optional AI bots, run by a small Node + `ws` server.
-* **Character select**: 10 cosmetic runners (flat cap, rugby headband, chef hat, viking helmet, constable helmet,
-  cow suit, wide-brim hat, cheese-wedge hat with cape, top hat, bobble beanie). They are cosmetic only and all handle the same.
+* **Character select** (rotating 3D preview): 10 distinct low-poly runners with different heights, builds, outfits,
+  hair, and accessories: Rugby Reg (hooped kit, stocky), Farmer Fern (overalls, wellies, flat cap, straw), Chef Brie
+  (apron, toque, belly, moustache), Sir Cheddalot (armour, tabard, plumed helm), Captain Curd (cape, mask, emblem),
+  Granny Gwen (cardigan, skirt, bun, glasses, handbag), Moo-Suit Mo (cow onesie with hood and horns), Lycra Lexi
+  (neon lycra, shades, ponytail), Reverend Rupert (cassock, dog collar), and Punk Pete (mohawk, studded jacket,
+  ripped jeans, boots). They are cosmetic only and all handle the same. AI racers always use characters nobody
+  else is wearing.
 
 ## Controls
 
@@ -121,10 +126,22 @@ node tests/feel.shots.js                                # camera/HUD screenshots
 node tests/online.browser.test.js http://localhost:8797 # two headless browsers race online
 ```
 
+### Art direction
+Stylized low-poly look: faceted, flat-shaded terrain with per-face vertex colours (fresh greens, chocolate mud,
+patchwork fields), chunky low-poly trees, hedges, rocks, fences, crowd, grass clumps, and a faceted cheese wheel.
+The lighting is warm overcast with crisp soft shadows. With a single view at high quality, there's subtle
+post-processing: soft bloom, ACES tone mapping, a light colour grade, and SMAA. Every mode gets a CSS vignette
+(`?post=0` turns the post-processing off).
+
+### AI
+The bots steer at where the cheese *will* be (its position plus lead), and they race in a pack around you: each one
+holds its own gap, mostly a few metres ahead of you between you and the cheese, using a gentle rubber band. That
+keeps them on screen. In the sim test, bots are on camera about 70% of the time for a fast player and 100% for a
+slow one, with a mean distance of 13 to 15 m. You start in the middle of the line with the bots either side.
+
 ### Camera, HUD, sound
 A low, close chase camera looks down the slope and leads fast runners so they stay in frame. The field of view widens
-with speed, and you get speed lines, a light shake on bumps, and a slow orbit after the race. Toasts sit in a small
-corner feed showing only your events and nearby ones. The cheese has a pulsing glow and pin, plus an edge-of-screen
+with speed, and you get speed lines, a light shake on bumps, and a slow orbit after the race. There are no in-race text popups. You only get the countdown, the HUD bars and the results screen. The cheese has a pulsing glow and pin, plus an edge-of-screen
 arrow when it's off camera. A big wipeout gives half a second of slow-mo (offline only). Sound is synthesized with
 WebAudio: footsteps, thuds, wind that rises with speed, the crowd, and a roar on the catch. It starts on your first
 key press.

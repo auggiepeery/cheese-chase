@@ -7,6 +7,12 @@ import { ST, CHARACTERS, FINISH_Z, height } from './core.js';
 import { buildWorld, Particles } from './world.js';
 import { RacerView, CheeseView, buildRunner } from './models.js';
 import { audio } from './audio.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 
 const $ = (s) => document.querySelector(s);
 const canvas = $('#c');
@@ -16,7 +22,7 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 1.05;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
@@ -24,6 +30,34 @@ const world = buildWorld(scene, renderer);
 const particles = new Particles(scene, 3000);
 const cheeseView = new CheeseView(scene);
 const menuCam = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 3000);
+
+// post-processing (single view, high quality only): soft bloom -> tone map -> colour grade -> SMAA.
+// Split-screen and low quality render directly; the vignette is a cheap CSS overlay so every mode gets it.
+const post = (() => {
+  const composer = new EffectComposer(renderer);
+  const rp = new RenderPass(scene, menuCam);
+  composer.addPass(rp);
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.22, 0.6, 0.92));
+  composer.addPass(new OutputPass());
+  composer.addPass(new ShaderPass({
+    uniforms: { tDiffuse: { value: null } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+      void main(){ vec4 c = texture2D(tDiffuse, vUv); vec3 col = c.rgb;
+        float l = dot(col, vec3(0.299, 0.587, 0.114));
+        col = mix(vec3(l), col, 1.1);                       // a touch more saturation
+        col = (col - 0.5) * 1.06 + 0.5;                      // and contrast
+        col *= vec3(1.02, 1.0, 0.97);                        // warm grade
+        gl_FragColor = vec4(clamp(col, 0.0, 1.0), c.a); }`,
+  }));
+  const smaa = new SMAAPass(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio());
+  composer.addPass(smaa);
+  return { composer, rp, enabled: true };
+})();
+function renderView(cam) {
+  if (post.enabled && quality >= 2) { post.rp.camera = cam; post.composer.render(); }
+  else renderer.render(scene, cam);
+}
 
 // ---------------------------------------------------------------------------
 // input
@@ -120,12 +154,15 @@ function makeHud(label, splitIdx, splitCount) {
   $('#huds').appendChild(el);
   return { el, timer: el.querySelector('.timer'), pos: el.querySelector('.pos'), of: el.querySelector('.of'), msg: el.querySelector('.hud-msg'), hint: el.querySelector('.hud-hint'), speed: el.querySelector('.speed b'), meter: el.querySelector('.meter-fill'), stam: el.querySelector('.stam-fill'), cdist: el.querySelector('.cheese-dist'), charges: el.querySelector('.charges'), lines: el.querySelector('.speedlines'), arrow: el.querySelector('.cheese-arrow'), arrowI: el.querySelector('.cheese-arrow i'), feed: el.querySelector('.hud-feed'), msgT: 0 };
 }
+// in-race text popups were removed on request: these stay as no-ops so event handling remains simple
+const POPUPS = false;
 function hudMessage(view, text, cls = '', dur = 1.6) {
-  if (!view) return;
+  if (!view || !POPUPS) return;
   view.hud.msg.textContent = text; view.hud.msg.className = 'hud-msg show ' + cls; view.hud.msgT = dur;
 }
 // small corner feed per view: only events involving that player or happening near them (max 3)
 function feed(text, ids = null) {
+  if (!POPUPS) return;
   for (const v of game.views) {
     if (ids) {
       const me = racerPos(v.racerId);
@@ -162,6 +199,7 @@ function newMatch(mode) {
   const humans = mode === 'split' ? 2 : 1;
   const roster = [];
   const taken = new Set();
+  if (humans === 2 && game.chars[0] === game.chars[1]) game.chars[1] = (game.chars[1] + 1) % CHARACTERS.length; // two players never look identical
   for (let h = 0; h < humans; h++) { roster.push({ id: 'p' + (h + 1), name: humans === 1 ? 'You' : 'Player ' + (h + 1), char: game.chars[h] }); taken.add(game.chars[h]); }
   const nAI = mode === 'split' ? 4 : 5;
   const names = [...Core.AI_NAMES].sort(() => Math.random() - 0.5);
@@ -184,7 +222,7 @@ function startOffline(mode, nextHeat = false) {
   const humans = mode === 'split' ? 2 : 1;
   for (const r of game.match.roster) Core.addRacer(race, r);
   // shuffle grid order so the player isn't always at the edge
-  race.racers.sort(() => Math.random() - 0.5); race.racers.forEach((r, i) => { r.idx = i; });
+  Core.gridOrder(race);
   for (const r of race.racers) Core.placeAtStart(race, r);
   for (const r of race.racers) {
     const isP = !r.ai;
@@ -262,7 +300,9 @@ function handleEvents(events) {
       case 'rjump': {
         const p = racerPos(ev.id);
         if (p) { particles.kick(p.x, p.y, p.z, 0, 5, 14); }
-        if (v) { hudMessage(v, 'ROLL-JUMP!', 'gold', 0.6); audio.whoosh(); v.shake = 0.25; }
+        const rv = game.racerViews.get(ev.id), r = game.race && game.race.racers.find((x) => x.id === ev.id);
+        if (rv && r) rv.kick(r.vx * 0.35, 6.5, r.vz * 0.35);
+        if (v) { hudMessage(v, 'ROLL-JUMP!', 'gold', 0.6); audio.whoosh(); v.shake = 0.3; v.fovPunch = 8; }
         break;
       }
       case 'clean': if (v) { hudMessage(v, 'CLEAN LANDING! +SPEED', 'go', 0.7); } break;
@@ -322,6 +362,7 @@ function updateHUDs(phase, cd, raceT, racers, cheese) {
       void aiBlocked;
       if (v.n === 2) hint = hint.replace('[E]', v.idx ? '[ / ]' : '[E]').replace(/\[SPACE\]/g, v.idx ? '[ENTER]' : '[SPACE]');
     }
+    if (!POPUPS) hint = '';
     h.hint.textContent = hint; h.hint.className = 'hud-hint' + (hint ? ' show' : '') + (hint.startsWith('GRAB IT') ? ' hot' : '');
   }
   // countdown
@@ -387,7 +428,8 @@ function updateCamera(v, dt, phase) {
   v.shake = Math.max(0, v.shake - dt * 1.5);
   v.cam.lookAt(v.look);
   // FOV kick with speed (up to +16)
-  v.cam.fov += ((60 + Math.min(16, Math.max(0, sp - 5) * 0.9)) - v.cam.fov) * (1 - Math.exp(-3 * dt));
+  v.fovPunch = Math.max(0, (v.fovPunch || 0) - dt * 14);
+  v.cam.fov += ((60 + Math.min(16, Math.max(0, sp - 5) * 0.9) + v.fovPunch) - v.cam.fov) * (1 - Math.exp(-(v.fovPunch > 0 ? 8 : 3) * dt));
   v.cam.updateProjectionMatrix();
   // hud message timers
   if (v.hud.msgT > 0) { v.hud.msgT -= dt; if (v.hud.msgT <= 0) v.hud.msg.className = 'hud-msg'; }
@@ -424,7 +466,10 @@ function updateCheeseGlow(t) {
   const on = !!game.mode && !cheeseHeld;
   cheeseGlow.sp.visible = cheeseGlow.pin.visible = on;
   if (!on) return;
-  const p = cheeseView.group.position, pulse = 1 + Math.sin(t * 6) * 0.18;
+  const p = cheeseView.group.position;
+  const inReach = game.views.some((v) => { const rv = game.racerViews.get(v.racerId); return rv && rv.root.position.distanceTo(p) < 2.6; });
+  const pulse = 1 + Math.sin(t * (inReach ? 14 : 6)) * (inReach ? 0.3 : 0.18);
+  cheeseGlow.sp.material.color.setHex(inReach ? 0x9dff6a : 0xffffff);
   cheeseGlow.sp.position.copy(p); cheeseGlow.sp.scale.setScalar(2.6 * pulse);
   cheeseGlow.pin.position.set(p.x, p.y + 1.5 + Math.sin(t * 4) * 0.15, p.z); cheeseGlow.pin.scale.setScalar(0.7);
 }
@@ -705,7 +750,7 @@ const preview = (() => {
   sc.add(new THREE.HemisphereLight(0xffffff, 0x557733, 1.3));
   const d = new THREE.DirectionalLight(0xfff0dd, 2.2); d.position.set(2, 4, 3); d.castShadow = true; sc.add(d);
   const disc = new THREE.Mesh(new THREE.CircleGeometry(0.9, 32), new THREE.MeshStandardMaterial({ color: 0x5a8f35 })); disc.rotation.x = -Math.PI / 2; disc.receiveShadow = true; sc.add(disc);
-  const cam = new THREE.PerspectiveCamera(32, 240 / 300, 0.1, 50); cam.position.set(0, 1.4, 4.4); cam.lookAt(0, 1.0, 0);
+  const cam = new THREE.PerspectiveCamera(32, 240 / 300, 0.1, 50); cam.position.set(0, 1.3, 5.2); cam.lookAt(0, 1.05, 0);
   return { r, sc, cam, models: [] };
 })();
 const selectors = [];
@@ -741,7 +786,7 @@ function cycleChar(i, d) {
 function renderPreviews(t) {
   for (const s of selectors) {
     preview.sc.add(s.model.root);
-    s.model.root.rotation.y = Math.sin(t * 0.8 + s.i) * 0.8;
+    s.model.root.rotation.y = t * 0.9 + s.i;
     const L = s.model.limbs, ph = t * 6 + s.i;
     s.model.body.position.y = 0.95 + Math.abs(Math.sin(ph)) * 0.03;
     L.shL.rotation.x = Math.sin(ph) * 0.4; L.shR.rotation.x = -Math.sin(ph) * 0.4; L.elL.rotation.x = L.elR.rotation.x = -0.6;
@@ -843,6 +888,7 @@ if (location.protocol === 'file:') $('#online-note').textContent = 'Opened from 
 // ---------------------------------------------------------------------------
 function resize() {
   renderer.setSize(innerWidth, innerHeight);
+  post.composer.setPixelRatio(renderer.getPixelRatio()); post.composer.setSize(innerWidth, innerHeight);
   menuCam.aspect = innerWidth / innerHeight; menuCam.updateProjectionMatrix();
 }
 addEventListener('resize', resize);
@@ -856,7 +902,9 @@ function setQuality(q) {
   world.tufts.count = q >= 2 ? world.tuftsMax : q === 1 ? Math.floor(world.tuftsMax * 0.6) : Math.floor(world.tuftsMax * 0.3);
   if (world.sun.shadow.mapSize.x !== ms) { world.sun.shadow.mapSize.set(ms, ms); if (world.sun.shadow.map) { world.sun.shadow.map.dispose(); world.sun.shadow.map = null; } }
   renderer.setSize(innerWidth, innerHeight);
+  post.composer.setPixelRatio(renderer.getPixelRatio()); post.composer.setSize(innerWidth, innerHeight);
 }
+if (new URLSearchParams(location.search).get('post') === '0') post.enabled = false;
 if (new URLSearchParams(location.search).get('quality') === 'low') setQuality(0);
 function frame() {
   requestAnimationFrame(frame);
@@ -898,8 +946,8 @@ function frame() {
       v.cam.aspect = vw / H; v.cam.updateProjectionMatrix();
       world.placeSun(v.look);
       world.sky.position.copy(v.cam.position);
-      renderer.setViewport(vx, 0, vw, H); renderer.setScissor(vx, 0, vw, H);
-      renderer.render(scene, v.cam);
+      if (game.views.length === 1) { renderer.setViewport(0, 0, W, H); renderView(v.cam); }
+      else { renderer.setViewport(vx, 0, vw, H); renderer.setScissor(vx, 0, vw, H); renderer.render(scene, v.cam); }
     }
     renderer.setScissorTest(false);
   } else {
@@ -907,17 +955,33 @@ function frame() {
     cheeseGlow.sp.visible = cheeseGlow.pin.visible = false;
     audio.update(0, 0, false);
     const z = 40 + ((t * 6) % (FINISH_Z - 40));
-    menuCam.position.set(26 + Math.sin(t * 0.1) * 6, height(0, z - 20) + 16, z - 20);
-    menuCam.lookAt(0, height(0, z + 25), z + 25);
+    if (window.__cc && window.__cc.lineupCam) { const L = window.__cc.lineupCam; menuCam.position.set(...L[0]); menuCam.lookAt(...L[1]); }
+    else {
+      menuCam.position.set(26 + Math.sin(t * 0.1) * 6, height(0, z - 20) + 16, z - 20);
+      menuCam.lookAt(0, height(0, z + 25), z + 25);
+    }
     world.placeSun(new THREE.Vector3(0, height(0, z), z));
     world.sky.position.copy(menuCam.position);
     world.updateCrowd(t, z, true);
     renderer.setViewport(0, 0, W, H);
-    renderer.render(scene, menuCam);
+    renderView(menuCam);
     if (game.screen === '#screen-select') renderPreviews(t);
   }
 }
-window.__cc = { game, online, Core, fps: 0,
+window.__cc = { game, online, Core, world, scene, fps: 0,
+  // test hook: line all characters up at the start for a screenshot
+  lineup() {
+    const views = [];
+    for (let i = 0; i < CHARACTERS.length; i++) {
+      const x = (i - (CHARACTERS.length - 1) / 2) * 1.25, z = -2;
+      const rv = new RacerView(scene, { id: 'L' + i, char: i }, null);
+      rv.apply({ x, y: height(x, z), z, yaw: (i % 2 ? 0.3 : -0.3), pitch: 0, roll: 0, state: ST.IDLE, st: 0, vx: 0, vz: 0, flags: 0, grounded: true }, 0.016, null);
+      for (let k = 0; k < 60; k++) rv.apply({ x, y: height(x, z), z, yaw: (i % 2 ? 0.3 : -0.3), pitch: 0, roll: 0, state: ST.IDLE, st: 0, vx: 0, vz: 0, flags: 0, grounded: true }, 0.03, null);
+      views.push(rv);
+    }
+    this.lineupCam = [[0, height(0, -2) + 1.6, 4.6], [0, height(0, -2) + 0.95, -2]];
+    return views.length;
+  },
   // test hook: advance the offline simulation without rendering (used by headless tests on slow software GPUs)
   advance(sec) { for (let i = 0; i < sec * 60; i++) { if (game.mode && game.mode !== 'online') { updateOffline(1 / 60); for (const v of game.views) updateCamera(v, 1 / 60, game.race.phase); } particles.update(1 / 60); } } };
 frame();

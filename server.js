@@ -66,7 +66,7 @@ function startRace(room) {
     used.add(ch);
     Core.addRacer(race, { id: 'bot' + i, name: names[i], char: ch, ai: true });
   }
-  race.racers.sort(() => Math.random() - 0.5); race.racers.forEach((r, i) => { r.idx = i; });
+  Core.gridOrder(race);
   for (const r of race.racers) Core.placeAtStart(race, r);
   room.race = race; room.tick = 0; room.phase = 'racing';
   broadcast(room, startMsg(room));

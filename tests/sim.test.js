@@ -109,3 +109,44 @@ import { Ragdoll } from '../src/ragdoll.js';
   if (c.z < 150) throw new Error('cheese did not roll down: z=' + c.z);
   console.log(`cheese OK (after 30 s: z=${c.z.toFixed(1)}, |q|=${Math.hypot(...c.q).toFixed(3)})`);
 }
+
+// AI stay with the player and chase the cheese: they must be near you and on camera most of the race
+{
+function visRun(seed, style = 'chase') {
+  const race = Core.createRace(seed);
+  Core.addRacer(race, { id: 'p1', name: 'You', char: 0 });
+  for (let i = 0; i < 5; i++) Core.addRacer(race, { id: 'ai' + i, name: 'AI' + i, char: i + 1, ai: true });
+  Core.gridOrder(race, Core.mulberry32(seed)); for (const r of race.racers) Core.placeAtStart(race, r);
+  const me = race.racers.find((r) => r.id === 'p1');
+  const inp = Core.newInput();
+  let frames = 0, onScreen = 0, aiFrames = 0, sumD = 0, sumC = 0, maxD = 0, t = 0;
+  while (race.phase !== 'over' && t < 120) {
+    const c = race.cheese;
+    inp.f = style === 'lazy' ? (t % 4 < 2.5 ? 1 : 0) : 1; inp.b = me.meter > 0.75 ? 1 : 0;
+    inp.s = style === 'chase' && me.meter < 0.2 ? 1 : 0;
+    inp.ax = Math.max(-1, Math.min(1, (c.x - me.x) * 0.3));
+    if (style === 'chase' && Math.hypot(c.x - me.x, c.z - me.z) < 2.5) inp.g++;
+    Core.step(race, 1 / 30, { p1: inp }); race.events = []; t += 1 / 30;
+    if (race.phase !== 'race') continue;
+    frames++;
+    // chase cam ~6.5 m behind, 60-76 deg vertical FOV at 16:9 => horizontal half-angle ~ 46-55 deg
+    const cz = me.z - 6.5, cx = me.x * 0.85;
+    for (const r of race.racers) {
+      if (!r.ai) continue;
+      aiFrames++;
+      const dz = r.z - cz, dx = r.x - cx;
+      if (dz > 1 && Math.abs(dx) < dz * 1.0 && dz < 70) onScreen++;
+      const d = Math.hypot(r.x - me.x, r.z - me.z); sumD += d; maxD = Math.max(maxD, d);
+      sumC += Math.hypot(r.x - c.x, r.z - c.z);
+    }
+  }
+  return { time: race.result && race.result.time, how: race.result && race.result.how, winner: race.result && race.result.id, onScreen: onScreen / aiFrames, meanD: sumD / aiFrames, meanC: sumC / aiFrames, maxD };
+}
+  for (const style of ['chase', 'lazy']) {
+    const rs = []; for (let s = 1; s <= 8; s++) rs.push(visRun(s * 101, style));
+    const avg = (k) => rs.reduce((a, r) => a + r[k], 0) / rs.length;
+    console.log(`AI visibility (${style} player): on screen ${(avg('onScreen') * 100).toFixed(0)}% of the time, mean distance to player ${avg('meanD').toFixed(1)} m`);
+    if (avg('onScreen') < 0.6) throw new Error('AI off screen too often: ' + avg('onScreen').toFixed(2));
+    if (avg('meanD') > 20) throw new Error('AI too far from the player: ' + avg('meanD').toFixed(1));
+  }
+}
